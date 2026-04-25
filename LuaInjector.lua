@@ -44,14 +44,17 @@ end
 ----------------------------------------------------------------
 local tabLua = guiCreateTab("Lua инжектор", tabPanel)
 
--- Поле для ввода кода
-local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 140, "-- Впишите сюда ваш Lua код", false, tabLua)
+-- Поле для ввода локального кода
+local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 180, "-- Впишите сюда ваш Lua код", false, tabLua)
 
--- Кнопки управления инжектором
-local btnRunLua = guiCreateButton(10, windowH - 120, 200, 40, "Запустить", false, tabLua)
-local btnClearLua = guiCreateButton(220, windowH - 120, 200, 40, "Очистить", false, tabLua)
+-- Кнопки управления локальным кодом
+local btnRunLua = guiCreateButton(10, windowH - 160, 200, 35, "Запустить код из окна", false, tabLua)
+local btnClearLua = guiCreateButton(220, windowH - 160, 200, 35, "Очистить", false, tabLua)
 
--- Запуск кода
+-- Кнопка для загрузки с GitHub
+local btnReloadRemote = guiCreateButton(10, windowH - 115, 410, 45, "🔄 Перезагрузить скрипт с GitHub", false, tabLua)
+
+-- Запуск локального кода
 addEventHandler("onClientGUIClick", btnRunLua, function()
     local code = guiGetText(luaMemo)
     if code == "" then return end
@@ -72,6 +75,30 @@ end, false)
 -- Очистка поля
 addEventHandler("onClientGUIClick", btnClearLua, function()
     guiSetText(luaMemo, "")
+end, false)
+
+-- Загрузка и запуск удаленного кода
+addEventHandler("onClientGUIClick", btnReloadRemote, function()
+    outputChatBox("[Инжектор] #FFFF00Загрузка скрипта с GitHub...", 255, 255, 255, true)
+    
+    fetchRemote("https://raw.githubusercontent.com/tibla/12321/refs/heads/main/freecam.txt", function(data, err)
+        -- err == 0 означает, что ошибок при скачивании нет
+        if err == 0 then
+            local func, compileErr = loadstring(data)
+            if func then
+                local success, execErr = pcall(func)
+                if success then
+                    outputChatBox("[Инжектор] #00FF00Скрипт с GitHub успешно загружен и запущен!", 255, 255, 255, true)
+                else
+                    outputChatBox("[Инжектор] #FF0000Ошибка выполнения (GitHub): " .. tostring(execErr), 255, 255, 255, true)
+                end
+            else
+                outputChatBox("[Инжектор] #FF0000Ошибка синтаксиса (GitHub): " .. tostring(compileErr), 255, 255, 255, true)
+            end
+        else
+            outputChatBox("[Инжектор] #FF0000Ошибка сети! Код: " .. tostring(err), 255, 255, 255, true)
+        end
+    end)
 end, false)
 
 ----------------------------------------------------------------
