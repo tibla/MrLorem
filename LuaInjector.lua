@@ -1,36 +1,49 @@
-triggerEvent("ShowSuccess", root, "Тест уведомления")
-triggerEvent("ShowError", root, "Тест уведомления")
-triggerEvent("ShowWarning", root, "Тест уведомления")
 ----------------------------------------------------------------
--- SCREEN
+-- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА (ДЛЯ ОБНОВЛЕНИЯ)
+----------------------------------------------------------------
+_G.GH_Cache = _G.GH_Cache or { events = {}, binds = {}, gui = {} }
+
+-- Функция полной выгрузки текущего скрипта
+function fullCleanup()
+    -- 1. Удаляем главное окно
+    if isElement(mainWin) then destroyElement(mainWin) end
+    
+    -- 2. Снимаем все бинды, которые мы регистрировали
+    local keys = {"f9", "x", "h", "[", "0", "9", "l", "k", "j", "f6", "f5", "lshift", "]"}
+    for _, key in ipairs(keys) do unbindKey(key, "down") end
+    
+    -- 3. Удаляем все активные эвенты (рендеры и т.д.)
+    for eventName, data in pairs(_G.GH_Cache.events) do
+        removeEventHandler(eventName, data.root, data.fn)
+    end
+    
+    -- 4. Сбрасываем кэш
+    _G.GH_Cache.events = {}
+    _G.GH_Cache.gui = {}
+    
+    showCursor(false)
+    outputChatBox("[Engine] #FFFF00Скрипт полностью выгружен. Загрузка новой версии...", 255, 255, 255, true)
+end
+----------------------------------------------------------------
+-- НАСТРОЙКИ ЭКРАНА И ОКНА
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
 local windowW, windowH = 750, 720
 local x, y = (screenW - windowW) / 2, (screenH - windowH) / 2
 
-----------------------------------------------------------------
--- GUI WINDOW
-----------------------------------------------------------------
-local mainWin = guiCreateWindow(x, y, windowW, windowH, "", false)
+mainWin = guiCreateWindow(x, y, windowW, windowH, "MR.Lorem | Control Panel", false)
 guiWindowSetSizable(mainWin, false)
 guiSetVisible(mainWin, false)
 
-----------------------------------------------------------------
--- ЗАГОЛОВОК
-----------------------------------------------------------------
 local titleLabel = guiCreateLabel(0, 0, windowW, 25, "MR.Lorem | By Lorem", false, mainWin)
 guiLabelSetHorizontalAlign(titleLabel, "center", false)
 guiLabelSetVerticalAlign(titleLabel, "center")
 guiSetFont(titleLabel, "default-bold-small")
-guiLabelSetColor(titleLabel, 255, 255, 255)
 
-----------------------------------------------------------------
--- TAB PANEL
-----------------------------------------------------------------
 local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, mainWin)
 
 ----------------------------------------------------------------
--- TAB 1: ПРИКОЛЫ
+-- TAB 1: ПРИКОЛЫ (КНОПКИ)
 ----------------------------------------------------------------
 local tabFun = guiCreateTab("Приколы", tabPanel)
 local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
@@ -40,66 +53,40 @@ local function addMenuButton(name, fn)
     local btn = guiCreateButton(10, currentY, 250, 35, name, false, scrollFun)
     addEventHandler("onClientGUIClick", btn, fn, false)
     currentY = currentY + 40
+    return btn
 end
 
 ----------------------------------------------------------------
 -- TAB 2: LUA ИНЖЕКТОР
 ----------------------------------------------------------------
 local tabLua = guiCreateTab("Lua инжектор", tabPanel)
-
--- Поле для ввода локального кода
 local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 180, "-- Впишите сюда ваш Lua код", false, tabLua)
-
--- Кнопки управления локальным кодом
 local btnRunLua = guiCreateButton(10, windowH - 160, 200, 35, "Запустить код из окна", false, tabLua)
-local btnClearLua = guiCreateButton(220, windowH - 160, 200, 35, "CLear All", false, tabLua)
-
--- Кнопка для загрузки с GitHub
-local btnReloadRemote = guiCreateButton(10, windowH - 115, 410, 45, "🔄 Перезагрузить скрипт с GitHub", false, tabLua)
+local btnClearLua = guiCreateButton(220, windowH - 160, 200, 35, "Clear All", false, tabLua)
+local btnReloadRemote = guiCreateButton(10, windowH - 115, 410, 45, "🔄 ВЫГРУЗИТЬ И ОБНОВИТЬ С GITHUB", false, tabLua)
 
 -- Запуск локального кода
 addEventHandler("onClientGUIClick", btnRunLua, function()
     local code = guiGetText(luaMemo)
-    if code == "" then return end
-    
     local func, err = loadstring(code)
-    if func then
-        local success, execErr = pcall(func)
-        if success then
-            outputChatBox("[Инжектор] #00FF00Скрипт успешно выполнен!", 255, 255, 255, true)
-        else
-            outputChatBox("[Инжектор] #FF0000Ошибка выполнения: " .. tostring(execErr), 255, 255, 255, true)
-        end
-    else
-        outputChatBox("[Инжектор] #FF0000Ошибка синтаксиса: " .. tostring(err), 255, 255, 255, true)
-    end
+    if func then pcall(func) else outputChatBox("Ошибка: "..tostring(err)) end
 end, false)
 
 -- Очистка поля
-addEventHandler("onClientGUIClick", btnClearLua, function()
-    guiSetText(luaMemo, "")
-end, false)
+addEventHandler("onClientGUIClick", btnClearLua, function() guiSetText(luaMemo, "") end, false)
 
--- Загрузка и запуск удаленного кода
+-- ГЛАВНАЯ КНОПКА: ВЫГРУЗКА И ЗАГРУЗКА
 addEventHandler("onClientGUIClick", btnReloadRemote, function()
-    outputChatBox("[Инжектор] #FFFF00Загрузка скрипта с GitHub...", 255, 255, 255, true)
-    
-    fetchRemote("https://raw.githubusercontent.com/tibla/12321/refs/heads/main/freecam.txt", function(data, err)
-        -- err == 0 означает, что ошибок при скачивании нет
+    fetchRemote("https://raw.githubusercontent.com/tibla/MrLorem/refs/heads/main/LuaInjector.lua", function(data, err)
         if err == 0 then
+            fullCleanup() -- Сначала стираем всё текущее (включая это меню)
             local func, compileErr = loadstring(data)
-            if func then
-                local success, execErr = pcall(func)
-                if success then
-                    outputChatBox("[Инжектор] #00FF00Скрипт с GitHub успешно загружен и запущен!", 255, 255, 255, true)
-                else
-                    outputChatBox("[Инжектор] #FF0000Ошибка выполнения (GitHub): " .. tostring(execErr), 255, 255, 255, true)
-                end
-            else
-                outputChatBox("[Инжектор] #FF0000Ошибка синтаксиса (GitHub): " .. tostring(compileErr), 255, 255, 255, true)
+            if func then 
+                pcall(func) -- Запускаем новый код из файла
+                triggerEvent("ShowSuccess", root, "Скрипт успешно обновлен!")
             end
         else
-            outputChatBox("[Инжектор] #FF0000Ошибка сети! Код: " .. tostring(err), 255, 255, 255, true)
+            outputChatBox("[Error] Не удалось скачать файл: " .. tostring(err), 255, 0, 0)
         end
     end)
 end, false)
@@ -468,9 +455,33 @@ end
 function tpLexa()
     teleportToTextID(lexa, "Lexa")
 end
+
+----------------------------------------------------------------
+--ФАРМ АВТОБУС
+----------------------------------------------------------------
+local autoMode = false
+function autoLoop()
+    if not autoMode then return end
+    local veh = getPedOccupiedVehicle(localPlayer)
+    if veh then 
+        fixVehicle(veh) 
+        setElementCollisionsEnabled(veh, false)
+    end
+    local waypoint = false
+    for _, v in ipairs(getElementsByType("blip")) do
+        if getBlipIcon(v) == 41 then waypoint = v break end
+    end
+    if waypoint then
+        local wx, wy, wz = getElementPosition(waypoint)
+        setElementPosition(veh or localPlayer, wx, wy, wz + 1)
+    end
+end
+addEventHandler("onClientRender", root, autoLoop)
+_G.GH_Cache.events["autoLoop"] = { root = root, fn = autoLoop }
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
 ----------------------------------------------------------------
+addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop)
 addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint)
 addMenuButton("🔧 Починить авто (H)", repairVehicle)
 addMenuButton("📷 FreeCam ([)", toggleFreecam)
@@ -511,4 +522,14 @@ bindKey("lshift", "down", function()
     if not veh or getVehicleController(veh) ~= localPlayer then return end
     local sx, sy, sz = getElementVelocity(veh)
     setElementVelocity(veh, sx*1.5, sy*1.5, sz)
+end)
+bindKey("]", "down", function() 
+    autoMode = not autoMode 
+    if not autoMode then 
+        local v = getPedOccupiedVehicle(localPlayer)
+        if v then setElementCollisionsEnabled(v, true) end
+        triggerEvent("ShowError", root, "Auto-Mode OFF")
+    else
+        triggerEvent("ShowSuccess", root, "Auto-Mode ON")
+    end
 end)
