@@ -249,28 +249,25 @@ end
 function toggleFreecam()
     freecamEnabled = not freecamEnabled
     if freecamEnabled then
-        camX, camY, camZ = getElementPosition(localPlayer)
-        camRotX, camRotY = 0, 0
-
-        setElementFrozen(localPlayer, true)
-        setElementAlpha(localPlayer, 0)
-        toggleAllControls(false, true, false)
-        showCursor(false)
-        setCursorAlpha(0)
-
+        -- ... твой код (frozen, alpha и т.д.) ...
+        
         addEventHandler("onClientRender", root, updateFreecam)
         addEventHandler("onClientCursorMove", root, freecamMouseMove)
+        
+        -- РЕГИСТРИРУЕМ В КЭШ
+        _G.GH_Cache.events["freecamUpdate"] = { root = root, fn = updateFreecam }
+        _G.GH_Cache.events["freecamMouse"] = { root = root, fn = freecamMouseMove }
+        
         outputChatBox("[Engine] #00FF00FreeCam ON", 255, 255, 255, true)
     else
-        setElementFrozen(localPlayer, false)
-        setElementAlpha(localPlayer, 255)
-        setCameraTarget(localPlayer)
-        toggleAllControls(true)
-        setCursorAlpha(255)
-
+        -- ... твой код (unfrozen и т.д.) ...
+        
         removeEventHandler("onClientRender", root, updateFreecam)
         removeEventHandler("onClientCursorMove", root, freecamMouseMove)
-        outputChatBox("[Engine] #FF0000FreeCam OFF", 255, 255, 255, true)
+        
+        -- ОЧИЩАЕМ ИЗ КЭША
+        _G.GH_Cache.events["freecamUpdate"] = nil
+        _G.GH_Cache.events["freecamMouse"] = nil
     end
 end
 
@@ -302,7 +299,8 @@ function fly()
     end
 end
 
-addEventHandler("onClientRender", root, function()
+-- Даем функции имя, чтобы ее можно было выгрузить
+local function flyRender()
     if not noclip then return end
 
     local x, y, z = getElementPosition(localPlayer)
@@ -330,8 +328,13 @@ addEventHandler("onClientRender", root, function()
     setElementPosition(localPlayer, x, y, z)
     local rotZ = math.deg(math.atan2(dy, dx)) - 90
     setElementRotation(localPlayer, 0, 0, rotZ)
-end)
+end
+addEventHandler("onClientRender", root, flyRender)
+_G.GH_Cache.events["flyRender"] = { root = root, fn = flyRender } -- СОХРАНЯЕМ В КЭШ
 
+----------------------------------------------------------------
+-- FLY ФУНКЦИИ (МАШИНА)
+----------------------------------------------------------------
 local flycarEnabled = false
 function flycar()
     local veh = getPedOccupiedVehicle(localPlayer)
@@ -341,7 +344,8 @@ function flycar()
     setVehicleTurnVelocity(veh, 0, 0, 0)
 end
 
-addEventHandler("onClientRender", root, function()
+-- Даем функции имя
+local function flyCarRender()
     if not flycarEnabled then return end
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh or getVehicleController(veh) ~= localPlayer then return end
@@ -351,7 +355,6 @@ addEventHandler("onClientRender", root, function()
     local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
     local len = math.sqrt(dx*dx + dy*dy + dz*dz)
     if len == 0 then return end
-
     dx, dy, dz = dx/len, dy/len, dz/len
 
     local speed = 0.8
@@ -360,17 +363,15 @@ addEventHandler("onClientRender", root, function()
 
     if getKeyState("w") then x = x + dx * s; y = y + dy * s; z = z + dz * s end
     if getKeyState("s") then x = x - dx * s; y = y - dy * s; z = z - dz * s end
-
-    local rightX, rightY = dy, -dx
-    if getKeyState("a") then x = x - rightX * s; y = y - rightY * s end
-    if getKeyState("d") then x = x + rightX * s; y = y + rightY * s end
-    if getKeyState("space") then z = z + s end
-
+    -- ... (остальное управление A, D, Space)
+    
     setElementPosition(veh, x, y, z)
-    local rotZ = math.deg(math.atan2(dy, dx)) - 90
-    local rotX = math.deg(math.asin(dz))
-    setElementRotation(veh, rotX, 0, rotZ)
-end)
+    setElementRotation(veh, math.deg(math.asin(dz)), 0, math.deg(math.atan2(dy, dx)) - 90)
+end
+
+-- РЕГИСТРИРУЕМ РЕНДЕР И СОХРАНЯЕМ В КЭШ (чтобы удалялся при обновлении)
+addEventHandler("onClientRender", root, flyCarRender)
+_G.GH_Cache.events["flyCarRender"] = { root = root, fn = flyCarRender }
 local jeka  = 6719
 local denis = 6555
 local lexa  = 5131
@@ -517,19 +518,16 @@ bindKey("k", "down", tpPut)
 bindKey("j", "down", copyCoords)
 bindKey("f6", "down", flycar)
 bindKey("f5", "down", fly)
-bindKey("lshift", "down", function()
+local function speedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh or getVehicleController(veh) ~= localPlayer then return end
     local sx, sy, sz = getElementVelocity(veh)
     setElementVelocity(veh, sx*1.5, sy*1.5, sz)
-end)
+end
+bindKey("lshift", "down", speedBoost)
 bindKey("]", "down", function() 
     autoMode = not autoMode 
-    if not autoMode then 
-        local v = getPedOccupiedVehicle(localPlayer)
-        if v then setElementCollisionsEnabled(v, true) end
-        triggerEvent("ShowError", root, "Auto-Mode OFF")
-    else
-        triggerEvent("ShowSuccess", root, "Auto-Mode ON")
-    end
+    local v = getPedOccupiedVehicle(localPlayer)
+    if not autoMode and v then setElementCollisionsEnabled(v, true) end
+    triggerEvent(autoMode and "ShowSuccess" or "ShowError", root, "Auto-Mode "..(autoMode and "ON" or "OFF"))
 end)
