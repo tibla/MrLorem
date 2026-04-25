@@ -482,10 +482,48 @@ function autoLoop()
 end
 addEventHandler("onClientRender", root, autoLoop)
 _G.GH_Cache.events["autoLoop"] = { root = root, fn = autoLoop }
+
+function smartMarketGhost()
+    -- 1. Определяем цель (машина или игрок)
+    local target = getPedOccupiedVehicle(localPlayer) or localPlayer
+    
+    -- 2. Сохраняем текущие координаты и ротацию
+    local x, y, z = getElementPosition(target)
+    local rx, ry, rz = getElementRotation(target)
+
+    -- 3. Вызываем серверный переход на биржу
+    rynok() 
+
+    -- 4. Возвращаем игрока назад через короткую паузу
+    -- Мы сохраняем таймер в переменную, если вдруг понадобится его отменить
+    local ghostTimer = setTimer(function()
+        if isElement(target) then
+            -- Телепортируем обратно на сохраненную точку
+            setElementPosition(target, x, y, z)
+            setElementRotation(target, rx, ry, rz)
+            
+            -- ВАЖНО: Оставляем миры БИРЖИ (50 и 1), чтобы сервер нас не видел
+            setElementInterior(target, 1)
+            setElementDimension(target, 50)
+            
+            outputChatBox("[Engine] #00FF00Стелс-инвиз активирован (Мир 50:1)", 255, 255, 255, true)
+            triggerEvent("ShowSuccess", root, "Стелс-режим ВКЛ")
+        end
+    end, 150, 1)
+    
+    -- Если у тебя есть таблица для таймеров, можно записать туда:
+    -- _G.GH_Cache.timers = _G.GH_Cache.timers or {}
+    -- table.insert(_G.GH_Cache.timers, ghostTimer)
+end
+
+-- Регистрация в кэше (если ты планируешь вызывать эту функцию через цикл, 
+-- но обычно она просто вешается на кнопку в меню)
+_G.GH_Cache.events["smartMarketGhost"] = { root = root, fn = smartMarketGhost }
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
 ----------------------------------------------------------------
 addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop)
+addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost)
 addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint)
 addMenuButton("🔧 Починить авто (H)", repairVehicle)
 addMenuButton("📷 FreeCam ([)", toggleFreecam)
@@ -520,6 +558,7 @@ bindKey("l", "down", tpTake)
 bindKey("k", "down", tpPut)
 bindKey("j", "down", copyCoords)
 bindKey("f6", "down", flycar)
+
 bindKey("f5", "down", fly)
 local function speedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
