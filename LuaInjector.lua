@@ -484,39 +484,38 @@ addEventHandler("onClientRender", root, autoLoop)
 _G.GH_Cache.events["autoLoop"] = { root = root, fn = autoLoop }
 
 function smartMarketGhost()
-    -- 1. Определяем цель (машина или игрок)
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
     
-    -- 2. Сохраняем текущие координаты и ротацию ПЕРЕД телепортом
+    -- 1. Сохраняем позицию
     local x, y, z = getElementPosition(target)
     local rx, ry, rz = getElementRotation(target)
 
-    -- 3. Вызываем серверный переход на биржу
-    -- В этот момент сервер меняет тебе Dimension на 50 и Interior на 1
+    -- 2. Летим на биржу (сервер дает Dim 50, Int 1)
     rynok() 
-    outputChatBox("[Engine] #FFFF00Ожидаем прогрузки мира биржи (2 сек)...", 255, 255, 255, true)
+    outputChatBox("[Engine] #FFFF00Запрос отправлен. Ждем возврата...", 255, 255, 255, true)
 
-    -- 4. Возвращаем игрока назад через 2000мс (2 секунды)
-    -- Мы увеличили задержку, чтобы сервер успел "закрепить" за тобой новый мир
-    local ghostTimer = setTimer(function()
+    -- 3. Первый таймер: возвращаем тело на старые координаты через 150мс
+    setTimer(function()
         if isElement(target) then
-            -- Телепортируем обратно на сохраненную точку
             setElementPosition(target, x, y, z)
             setElementRotation(target, rx, ry, rz)
-            
-            -- ОСТАВЛЯЕМ миры биржи, чтобы быть невидимым
-            -- Если поставишь тут 0 и 0, инвиз пропадет!
-            setElementInterior(target, 0)   -- Интерьер биржи
-            setElementDimension(target, 0) -- Дименшн биржи
-            
-            outputChatBox("[Engine] #00FF00Стелс-инвиз успешно активирован!", 255, 255, 255, true)
-            triggerEvent("ShowSuccess", root, "Инвиз активирован")
+            outputChatBox("[Engine] #00FF00Вернулись на точку. Ждем 2 сек до смены мира...", 255, 255, 255, true)
+
+            -- 4. ВТОРОЙ ТАЙМЕР: меняем мир на 0:0 через 2 секунды после возврата
+            setTimer(function()
+                if isElement(target) then
+                    setElementInterior(target, 0)
+                    setElementDimension(target, 0)
+                    outputChatBox("[Engine] #FF0000Мир сброшен на 0:0!", 255, 255, 255, true)
+                end
+            end, 2000, 1)
         end
-    end, 2000, 1) -- Здесь задается задержка (1000мс = 1сек)
+    end, 150, 1)
 end
 
--- Регистрация в кэше для корректного удаления при перезагрузке
+-- Регистрация в кэше
 _G.GH_Cache.events["smartMarketGhost"] = { root = root, fn = smartMarketGhost }
+
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
 ----------------------------------------------------------------
