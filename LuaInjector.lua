@@ -52,7 +52,7 @@ local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 180, "-- Впиш�
 
 -- Кнопки управления локальным кодом
 local btnRunLua = guiCreateButton(10, windowH - 160, 200, 35, "Запустить код из окна", false, tabLua)
-local btnClearLua = guiCreateButton(220, windowH - 160, 200, 35, "Очистить", false, tabLua)
+local btnClearLua = guiCreateButton(220, windowH - 160, 200, 35, "CLear All", false, tabLua)
 
 -- Кнопка для загрузки с GitHub
 local btnReloadRemote = guiCreateButton(10, windowH - 115, 410, 45, "🔄 Перезагрузить скрипт с GitHub", false, tabLua)
