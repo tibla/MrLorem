@@ -199,7 +199,6 @@ function freecamMouseMove(_, _, aX, aY)
     if not freecamEnabled then return end
     local screenW, screenH = guiGetScreenSize()
     local centerX, centerY = screenW / 2, screenH / 2
-
     local diffX = aX - centerX
     local diffY = aY - centerY
 
@@ -225,16 +224,8 @@ function updateFreecam()
     local fY = math.cos(radX) * math.sin(radZ)
     local fZ = math.sin(radX)
 
-    if getKeyState("w") then
-        camX = camX + fX * currentSpeed
-        camY = camY + fY * currentSpeed
-        camZ = camZ + fZ * currentSpeed
-    end
-    if getKeyState("s") then
-        camX = camX - fX * currentSpeed
-        camY = camY - fY * currentSpeed
-        camZ = camZ - fZ * currentSpeed
-    end
+    if getKeyState("w") then camX, camY, camZ = camX + fX * currentSpeed, camY + fY * currentSpeed, camZ + fZ * currentSpeed end
+    if getKeyState("s") then camX, camY, camZ = camX - fX * currentSpeed, camY - fY * currentSpeed, camZ - fZ * currentSpeed end
     if getKeyState("a") then
         camX = camX + math.cos(radZ + math.rad(90)) * currentSpeed
         camY = camY + math.sin(radZ + math.rad(90)) * currentSpeed
@@ -251,26 +242,41 @@ end
 
 function toggleFreecam()
     freecamEnabled = not freecamEnabled
+    
     if freecamEnabled then
-        -- ... твой код (frozen, alpha и т.д.) ...
+        -- ВКЛЮЧЕНИЕ
+        camX, camY, camZ = getCameraMatrix() -- Начинаем полет от текущей камеры
         
+        setElementFrozen(localPlayer, true)
+        setElementAlpha(localPlayer, 0)
+        showCursor(false)
+        setCursorAlpha(0)
+        toggleAllControls(false, true, false) -- Блокируем ходьбу, но оставляем чат
+
         addEventHandler("onClientRender", root, updateFreecam)
         addEventHandler("onClientCursorMove", root, freecamMouseMove)
         
-        -- РЕГИСТРИРУЕМ В КЭШ
         _G.GH_Cache.events["freecamUpdate"] = { root = root, fn = updateFreecam }
         _G.GH_Cache.events["freecamMouse"] = { root = root, fn = freecamMouseMove }
         
         outputChatBox("[Engine] #00FF00FreeCam ON", 255, 255, 255, true)
     else
-        -- ... твой код (unfrozen и т.д.) ...
-        
+        -- ВЫКЛЮЧЕНИЕ
         removeEventHandler("onClientRender", root, updateFreecam)
         removeEventHandler("onClientCursorMove", root, freecamMouseMove)
         
-        -- ОЧИЩАЕМ ИЗ КЭША
         _G.GH_Cache.events["freecamUpdate"] = nil
         _G.GH_Cache.events["freecamMouse"] = nil
+
+        setElementFrozen(localPlayer, false)
+        setElementAlpha(localPlayer, 255)
+        setCursorAlpha(255)
+        toggleAllControls(true) -- Разблокируем управление
+        
+        -- САМОЕ ВАЖНОЕ: Возвращаем камеру за спину игрока
+        setCameraTarget(localPlayer) 
+        
+        outputChatBox("[Engine] #FF0000FreeCam OFF", 255, 255, 255, true)
     end
 end
 
