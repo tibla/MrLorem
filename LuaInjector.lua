@@ -487,37 +487,35 @@ function smartMarketGhost()
     -- 1. Определяем цель (машина или игрок)
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
     
-    -- 2. Сохраняем текущие координаты и ротацию
+    -- 2. Сохраняем текущие координаты и ротацию ПЕРЕД телепортом
     local x, y, z = getElementPosition(target)
     local rx, ry, rz = getElementRotation(target)
 
     -- 3. Вызываем серверный переход на биржу
+    -- В этот момент сервер меняет тебе Dimension на 50 и Interior на 1
     rynok() 
+    outputChatBox("[Engine] #FFFF00Ожидаем прогрузки мира биржи (2 сек)...", 255, 255, 255, true)
 
-    -- 4. Возвращаем игрока назад через короткую паузу
-    -- Мы сохраняем таймер в переменную, если вдруг понадобится его отменить
+    -- 4. Возвращаем игрока назад через 2000мс (2 секунды)
+    -- Мы увеличили задержку, чтобы сервер успел "закрепить" за тобой новый мир
     local ghostTimer = setTimer(function()
         if isElement(target) then
             -- Телепортируем обратно на сохраненную точку
             setElementPosition(target, x, y, z)
             setElementRotation(target, rx, ry, rz)
             
-            -- ВАЖНО: Оставляем миры БИРЖИ (50 и 1), чтобы сервер нас не видел
-            setElementInterior(target, 1)
-            setElementDimension(target, 50)
+            -- ОСТАВЛЯЕМ миры биржи, чтобы быть невидимым
+            -- Если поставишь тут 0 и 0, инвиз пропадет!
+            setElementInterior(target, 0)   -- Интерьер биржи
+            setElementDimension(target, 0) -- Дименшн биржи
             
-            outputChatBox("[Engine] #00FF00Стелс-инвиз активирован (Мир 50:1)", 255, 255, 255, true)
-            triggerEvent("ShowSuccess", root, "Стелс-режим ВКЛ")
+            outputChatBox("[Engine] #00FF00Стелс-инвиз успешно активирован!", 255, 255, 255, true)
+            triggerEvent("ShowSuccess", root, "Инвиз активирован")
         end
-    end, 150, 1)
-    
-    -- Если у тебя есть таблица для таймеров, можно записать туда:
-    -- _G.GH_Cache.timers = _G.GH_Cache.timers or {}
-    -- table.insert(_G.GH_Cache.timers, ghostTimer)
+    end, 2000, 1) -- Здесь задается задержка (1000мс = 1сек)
 end
 
--- Регистрация в кэше (если ты планируешь вызывать эту функцию через цикл, 
--- но обычно она просто вешается на кнопку в меню)
+-- Регистрация в кэше для корректного удаления при перезагрузке
 _G.GH_Cache.events["smartMarketGhost"] = { root = root, fn = smartMarketGhost }
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
