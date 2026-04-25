@@ -384,7 +384,90 @@ addEventHandler("onClientRender", root, function()
     local rotX = math.deg(math.asin(dz))
     setElementRotation(veh, rotX, 0, rotZ)
 end)
+local jeka  = 6719
+local denis = 6555
+local lexa  = 5131
 
+----------------------------------------------------------------
+-- Поиск игрока по текстовому ID (p + ID)
+----------------------------------------------------------------
+function getPlayerByTextID(id)
+    local pid = "p" .. id
+
+    for _, player in ipairs(getElementsByType("player")) do
+        if getElementID(player) == pid then
+            return player
+        end
+    end
+
+    return false
+end
+
+----------------------------------------------------------------
+-- Универсальный телепорт к игроку
+----------------------------------------------------------------
+function teleportToTextID(id, name)
+    local targetPlayer = getPlayerByTextID(id)
+
+    if targetPlayer then
+        local x, y, z = getElementPosition(targetPlayer)
+        local int = getElementInterior(targetPlayer)
+        local dim = getElementDimension(targetPlayer)
+
+        local target = getPedOccupiedVehicle(localPlayer) or localPlayer
+
+        -- Ставим интерьер и dimension
+        setElementInterior(target, int)
+        setElementDimension(target, dim)
+
+        -- Сначала вверх для прогрузки зоны
+        setElementPosition(target, x, y, z + 50)
+
+        triggerEvent("ShowSuccess", root, "Загрузка зоны рядом с " .. name .. "...")
+
+        -- Потом безопасно вниз
+        setTimer(function()
+            if isElement(targetPlayer) then
+                local gx, gy, gz = getElementPosition(targetPlayer)
+                local safeZ = nil
+
+                for i = 100, 0, -20 do
+                    local ground = getGroundPosition(gx, gy, gz + i)
+                    if ground and ground > 0 then
+                        safeZ = ground + 1
+                        break
+                    end
+                end
+
+                if not safeZ then
+                    safeZ = gz + 1
+                end
+
+                setElementPosition(target, gx, gy, safeZ)
+
+                triggerEvent("ShowSuccess", root, "Телепорт к " .. name .. " завершен!")
+            end
+        end, 200, 1)
+
+    else
+        triggerEvent("ShowSuccess", root, name .. " не найден.")
+    end
+end
+
+----------------------------------------------------------------
+-- Отдельные функции
+----------------------------------------------------------------
+function tpJeka()
+    teleportToTextID(jeka, "Jeka")
+end
+
+function tpDenis()
+    teleportToTextID(denis, "Denis")
+end
+
+function tpLexa()
+    teleportToTextID(lexa, "Lexa")
+end
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
 ----------------------------------------------------------------
@@ -399,6 +482,9 @@ addMenuButton("📝 Копировать координаты (J)", copyCoords)
 addMenuButton("🚀 Летать на машине (f6)", flycar)
 addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly)
 addMenuButton("ТП НА БИРЖУ!!!", rynok)
+addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis)
+addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka)
+addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa)
 
 ----------------------------------------------------------------
 -- БИНДЫ (ГОРЯЧИЕ КЛАВИШИ)
