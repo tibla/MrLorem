@@ -364,25 +364,26 @@ local function flyCarRender()
     local camX, camY, camZ, lookX, lookY, lookZ = getCameraMatrix()
     
 -- Вектор вперед (Direction)
+-- 1. Вектор ВПЕРЕД (куда смотрим)
     local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
     local len = math.sqrt(dx*dx + dy*dy + dz*dz)
     if len == 0 then return end
     dx, dy, dz = dx/len, dy/len, dz/len
 
-    -- Вектор ВПРАВО (Right Vector)
-    -- Мы берем вектор 'вперед' и поворачиваем его на 90 градусов по горизонтали
-    local rx = -dy
-    local ry = dx
+    -- 2. Вектор ВПРАВО (перпендикуляр к 'вперед')
+    -- Поворачиваем вектор (dx, dy) на 90 градусов
+    local rx = dy 
+    local ry = -dx
 
     local speed = 0.8
     local boost = getKeyState("lshift") and 2.5 or 1.0
     local s = speed * boost
 
-    -- Вперед / Назад (W, S)
+    -- ВПЕРЕД / НАЗАД (W, S)
     if getKeyState("w") then x = x + dx * s; y = y + dy * s; z = z + dz * s end
     if getKeyState("s") then x = x - dx * s; y = y - dy * s; z = z - dz * s end
     
-    -- ВЛЕВО / ВПРАВО (A, D) - ТЕПЕРЬ ПОФИКШЕНО
+    -- ВЛЕВО / ВПРАВО (A, D) - Теперь точно по бокам
     if getKeyState("d") then x = x + rx * s; y = y + ry * s end
     if getKeyState("a") then x = x - rx * s; y = y - ry * s end
     
