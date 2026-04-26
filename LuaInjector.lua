@@ -601,9 +601,9 @@ _G.GH_Cache.events["snowblower"] = { root = root, fn = snowblower }
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
 ----------------------------------------------------------------
-addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "left")
-addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost, "left")
-addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "left")
+addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center")
+addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost, "center")
+addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "right")
 addMenuButton("🔧 Починить авто (H)", repairVehicle, "left")
 addMenuButton("📷 FreeCam ([)", toggleFreecam, "left")
 addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left")
@@ -614,9 +614,9 @@ addMenuButton("📝 Копировать координаты (J)", copyCoords, 
 addMenuButton("🚀 Летать на машине (f6)", flycar, "left")
 addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left")
 addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
-addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "left")
+addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "right")
 addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "right")
-addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "left")
+addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "right")
 addMenuButton("Устроиться на Очищувать", snowblower, "center")
 
 ----------------------------------------------------------------
