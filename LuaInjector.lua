@@ -363,30 +363,30 @@ local function flyCarRender()
     local x, y, z = getElementPosition(veh)
     local camX, camY, camZ, lookX, lookY, lookZ = getCameraMatrix()
     
-    -- Вектор вперед (Direction)
+-- Вектор вперед (Direction)
     local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
     local len = math.sqrt(dx*dx + dy*dy + dz*dz)
     if len == 0 then return end
     dx, dy, dz = dx/len, dy/len, dz/len
 
-    -- Вектор вправо (Right vector) через векторное произведение (вперед x вверх)
-    local rx = dy * 0 - dz * 0 -- Упрощенно для горизонтали
-    local rx = dy -- Косинус/синус не мучаем, берем перпендикуляр
-    local ry = -dx 
+    -- Вектор ВПРАВО (Right Vector)
+    -- Мы берем вектор 'вперед' и поворачиваем его на 90 градусов по горизонтали
+    local rx = -dy
+    local ry = dx
 
     local speed = 0.8
     local boost = getKeyState("lshift") and 2.5 or 1.0
     local s = speed * boost
 
-    -- Вперед / Назад
+    -- Вперед / Назад (W, S)
     if getKeyState("w") then x = x + dx * s; y = y + dy * s; z = z + dz * s end
     if getKeyState("s") then x = x - dx * s; y = y - dy * s; z = z - dz * s end
     
-    -- ВЛЕВО / ВПРАВО (A и D)
-    if getKeyState("d") then x = x + ry * s; y = y - rx * s end
-    if getKeyState("a") then x = x - ry * s; y = y + rx * s end
+    -- ВЛЕВО / ВПРАВО (A, D) - ТЕПЕРЬ ПОФИКШЕНО
+    if getKeyState("d") then x = x + rx * s; y = y + ry * s end
+    if getKeyState("a") then x = x - rx * s; y = y - ry * s end
     
-    -- ВВЕРХ / ВНИЗ (Пробел и Ctrl)
+    -- ВВЕРХ / ВНИЗ (Space, LCTRL)
     if getKeyState("space") then z = z + s end
     if getKeyState("lctrl") then z = z - s end
     
