@@ -51,9 +51,17 @@ local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, ma
 local tabFun = guiCreateTab("Приколы", tabPanel)
 local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
 
-local currentY = 10 -- ОБЯЗАТЕЛЬНО ВНЕ ФУНКЦИИ
+-- Создаем таблицу счетчиков для каждой колонки
+local columnY = {
+    ["left"] = 10,
+    ["center"] = 10,
+    ["right"] = 10
+}
 
 local function addMenuButton(name, fn, side)
+    -- Если забыл указать сторону, ставим "left" по умолчанию
+    side = side or "left"
+    
     local posX = 10
     if side == "center" then 
         posX = 250 
@@ -61,17 +69,19 @@ local function addMenuButton(name, fn, side)
         posX = 490 
     end
     
-    local btn = guiCreateButton(posX, currentY, 230, 35, name, false, scrollFun)
+    -- Берем текущую высоту именно для ЭТОЙ колонки
+    local y = columnY[side]
+    
+    local btn = guiCreateButton(posX, y, 230, 35, name, false, scrollFun)
     addEventHandler("onClientGUIClick", btn, fn, false)
     
-    -- ПЕРЕХОД НА НОВУЮ СТРОКУ
-    -- Если ты вызвал "right", мы спускаемся вниз на 40 пикселей для СЛЕДУЮЩЕГО ряда
-    if side == "right" then
-        currentY = currentY + 40
-    end
+    -- Увеличиваем высоту ТОЛЬКО для той колонки, в которую добавили кнопку
+    columnY[side] = columnY[side] + 40
     
     return btn
 end
+
+
 
 
 
