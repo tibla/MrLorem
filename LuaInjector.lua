@@ -373,37 +373,37 @@ local function flyCarRender()
 
     dx, dy, dz = dx / len, dy / len, dz / len
 
-    -- ВПРАВО (исправлено)
-    local rx = dy
-    local ry = -dx
+-- Боковой вектор (как в твоём примере)
+local rightX, rightY = dy, -dx
 
-    local speed = 0.8
-    local boost = getKeyState("lshift") and 2.5 or 1.0
-    local s = speed * boost
+local speed = 0.8
+local boost = getKeyState("lshift") and 2.5 or 1.0
+local s = speed * boost
 
-    -- W / S
-    if getKeyState("w") then
-        x = x + dx * s
-        y = y + dy * s
-        z = z + dz * s
-    end
+-- W / S
+if getKeyState("w") then
+    x = x + dx * s
+    y = y + dy * s
+    z = z + dz * s
+end
 
-    if getKeyState("s") then
-        x = x - dx * s
-        y = y - dy * s
-        z = z - dz * s
-    end
+if getKeyState("s") then
+    x = x - dx * s
+    y = y - dy * s
+    z = z - dz * s
+end
 
-    -- A / D (теперь правильно)
-    if getKeyState("d") then
-        x = x + rx * s
-        y = y + ry * s
-    end
+-- A = влево
+if getKeyState("a") then
+    x = x - rightX * s
+    y = y - rightY * s
+end
 
-    if getKeyState("a") then
-        x = x - rx * s
-        y = y - ry * s
-    end
+-- D = вправо
+if getKeyState("d") then
+    x = x + rightX * s
+    y = y + rightY * s
+end
 
     -- Вверх / вниз
     if getKeyState("space") then z = z + s end
