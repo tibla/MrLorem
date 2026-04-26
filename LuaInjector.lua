@@ -54,21 +54,29 @@ local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, t
 local currentY = 10 
 
 local function addMenuButton(name, fn, side)
-    local posX = 10
-    if side == "right" then 
-        posX = 270 
+    local posX = 10 -- По умолчанию "left"
+    
+    if side == "center" then 
+        posX = 250 -- Центр
+    elseif side == "right" then 
+        posX = 490 -- Право
     end
     
-    local btn = guiCreateButton(posX, currentY, 250, 35, name, false, scrollFun)
+    local btn = guiCreateButton(posX, currentY, 230, 35, name, false, scrollFun)
     addEventHandler("onClientGUIClick", btn, fn, false)
     
-    -- Увеличиваем высоту только когда заполнили ПРАВУЮ сторону
+    -- Смещаем Y только после того, как заполнили ПРАВУЮ (третью) колонку
     if side == "right" then
         currentY = currentY + 40
     end
     
     return btn
 end
+
+----------------------------------------------------------------
+-- ИСПОЛЬЗОВАНИЕ (строго по 3 штуки в ряд):
+----------------------------------------------------------------
+
 
 ----------------------------------------------------------------
 -- TAB 2: LUA ИНЖЕКТОР
@@ -597,7 +605,7 @@ addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
 addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "left")
 addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "left")
 addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "left")
-addMenuButton("Устроиться на Очищувать", snowblower, "right")
+addMenuButton("Устроиться на Очищувать", snowblower, "center")
 
 ----------------------------------------------------------------
 -- БИНДЫ (ГОРЯЧИЕ КЛАВИШИ)
