@@ -499,28 +499,37 @@ function tpLexa()
     teleportToTextID(lexa, "Lexa")
 end
 
-----------------------------------------------------------------
---ФАРМ АВТОБУС
-----------------------------------------------------------------
 local autoMode = false
+local autoTimer = nil
+
 function autoLoop()
     if not autoMode then return end
+    
     local veh = getPedOccupiedVehicle(localPlayer)
-    if veh then 
-        fixVehicle(veh) 
+    if not veh then return end
+
+    -- Оптимизация: чиним и отключаем коллизию не каждый миг
+    fixVehicle(veh) 
+    if getElementCollisionsEnabled(veh) then
         setElementCollisionsEnabled(veh, false)
     end
+
+    -- Ищем чекпоинт (блип 41)
     local waypoint = false
-    for _, v in ipairs(getElementsByType("blip")) do
-        if getBlipIcon(v) == 41 then waypoint = v break end
+    local allBlips = getElementsByType("blip")
+    for i = 1, #allBlips do
+        if getBlipIcon(allBlips[i]) == 41 then 
+            waypoint = allBlips[i] 
+            break 
+        end
     end
+
     if waypoint then
         local wx, wy, wz = getElementPosition(waypoint)
-        setElementPosition(veh or localPlayer, wx, wy, wz + 1)
+        -- Телепорт с небольшой задержкой (чтобы сервер успевал прогружать метки)
+        setElementPosition(veh, wx, wy, wz + 1.5)
     end
 end
-addEventHandler("onClientRender", root, autoLoop)
-_G.GH_Cache.events["autoLoop"] = { root = root, fn = autoLoop }
 
 function smartMarketGhost()
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
@@ -554,7 +563,10 @@ end
 
 -- Регистрация в кэше
 _G.GH_Cache.events["smartMarketGhost"] = { root = root, fn = smartMarketGhost }
-
+function snowblower()
+    triggerServerEvent ( "SnowBlower.StartJob", localPlayer )
+end
+_G.GH_Cache.events["snowblower"] = { root = root, fn = snowblower }
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
 ----------------------------------------------------------------
@@ -574,6 +586,7 @@ addMenuButton("ТП НА БИРЖУ!!!", rynok)
 addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis)
 addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka)
 addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa)
+addMenuButton("ТП К ЛЁХЕ(5131)", snowblower)
 
 ----------------------------------------------------------------
 -- БИНДЫ (ГОРЯЧИЕ КЛАВИШИ)
@@ -605,7 +618,18 @@ end
 bindKey("lshift", "down", speedBoost)
 bindKey("]", "down", function() 
     autoMode = not autoMode 
-    local v = getPedOccupiedVehicle(localPlayer)
-    if not autoMode and v then setElementCollisionsEnabled(v, true) end
-    triggerEvent(autoMode and "ShowSuccess" or "ShowError", root, "Auto-Mode "..(autoMode and "ON" or "OFF"))
+    
+    if autoMode then
+        -- Запускаем таймер: 100 мс (0.1 сек) — это очень быстро, но стабильно
+        -- 0 в конце означает бесконечный повтор
+        autoTimer = setTimer(autoLoop, 100, 0)
+        triggerEvent("ShowSuccess", root, "Auto-Farm: ON")
+    else
+        -- Останавливаем таймер
+        if isTimer(autoTimer) then killTimer(autoTimer) end
+        
+        local v = getPedOccupiedVehicle(localPlayer)
+        if v then setElementCollisionsEnabled(v, true) end
+        triggerEvent("ShowError", root, "Auto-Farm: OFF")
+    end
 end)
