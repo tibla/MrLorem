@@ -51,11 +51,22 @@ local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, ma
 local tabFun = guiCreateTab("Приколы", tabPanel)
 local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
 
-local currentY = 10
-local function addMenuButton(name, fn)
-    local btn = guiCreateButton(10, currentY, 250, 35, name, false, scrollFun)
+local currentY = 10 
+
+local function addMenuButton(name, fn, side)
+    local posX = 10
+    if side == "right" then 
+        posX = 270 
+    end
+    
+    local btn = guiCreateButton(posX, currentY, 250, 35, name, false, scrollFun)
     addEventHandler("onClientGUIClick", btn, fn, false)
-    currentY = currentY + 40
+    
+    -- Увеличиваем высоту только когда заполнили ПРАВУЮ сторону
+    if side == "right" then
+        currentY = currentY + 40
+    end
+    
     return btn
 end
 
@@ -570,23 +581,23 @@ _G.GH_Cache.events["snowblower"] = { root = root, fn = snowblower }
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
 ----------------------------------------------------------------
-addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop)
-addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost)
-addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint)
-addMenuButton("🔧 Починить авто (H)", repairVehicle)
-addMenuButton("📷 FreeCam ([)", toggleFreecam)
-addMenuButton("🛠️ Купить ремку (0)", buyRepairKit)
-addMenuButton("🩹 Купить аптечку (9)", buyMedKit)
+addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "left")
+addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost, "left")
+addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "left")
+addMenuButton("🔧 Починить авто (H)", repairVehicle, "left")
+addMenuButton("📷 FreeCam ([)", toggleFreecam, "left")
+addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left")
+addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left")
 addMenuButton("📍 ТП: Взять (L)", tpTake)
-addMenuButton("📍 ТП: Положить (K)", tpPut)
-addMenuButton("📝 Копировать координаты (J)", copyCoords)
-addMenuButton("🚀 Летать на машине (f6)", flycar)
-addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly)
-addMenuButton("ТП НА БИРЖУ!!!", rynok)
-addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis)
-addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka)
-addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa)
-addMenuButton("ТП К ЛЁХЕ(5131)", snowblower)
+addMenuButton("📍 ТП: Положить (K)", tpPut, "left")
+addMenuButton("📝 Копировать координаты (J)", copyCoords, "left")
+addMenuButton("🚀 Летать на машине (f6)", flycar, "left")
+addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left")
+addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
+addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "left")
+addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "left")
+addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "left")
+addMenuButton("Устроиться на Очищувать", snowblower, "right")
 
 ----------------------------------------------------------------
 -- БИНДЫ (ГОРЯЧИЕ КЛАВИШИ)
