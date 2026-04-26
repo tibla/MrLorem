@@ -395,12 +395,12 @@ local function flyCarRender()
     end
 
     -- A / D (теперь правильно)
-    if getKeyState("a") then
+    if getKeyState("d") then
         x = x + rx * s
         y = y + ry * s
     end
 
-    if getKeyState("d") then
+    if getKeyState("a") then
         x = x - rx * s
         y = y - ry * s
     end
