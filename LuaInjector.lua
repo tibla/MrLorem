@@ -374,8 +374,8 @@ local function flyCarRender()
     dx, dy, dz = dx / len, dy / len, dz / len
 
     -- ВПРАВО (исправлено)
-    local rx = -dy
-    local ry = dx
+    local rx = dy
+    local ry = -dx
 
     local speed = 0.8
     local boost = getKeyState("lshift") and 2.5 or 1.0
