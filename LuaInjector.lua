@@ -51,27 +51,29 @@ local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, ma
 local tabFun = guiCreateTab("Приколы", tabPanel)
 local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
 
-local currentY = 10 
+local currentY = 10 -- ОБЯЗАТЕЛЬНО ВНЕ ФУНКЦИИ
 
 local function addMenuButton(name, fn, side)
-    local posX = 10 -- По умолчанию "left"
-    
+    local posX = 10
     if side == "center" then 
-        posX = 250 -- Центр
+        posX = 250 
     elseif side == "right" then 
-        posX = 490 -- Право
+        posX = 490 
     end
     
     local btn = guiCreateButton(posX, currentY, 230, 35, name, false, scrollFun)
     addEventHandler("onClientGUIClick", btn, fn, false)
     
-    -- Смещаем Y только после того, как заполнили ПРАВУЮ (третью) колонку
+    -- ПЕРЕХОД НА НОВУЮ СТРОКУ
+    -- Если ты вызвал "right", мы спускаемся вниз на 40 пикселей для СЛЕДУЮЩЕГО ряда
     if side == "right" then
         currentY = currentY + 40
     end
     
     return btn
 end
+
+
 
 ----------------------------------------------------------------
 -- ИСПОЛЬЗОВАНИЕ (строго по 3 штуки в ряд):
