@@ -349,59 +349,76 @@ local flycarEnabled = false
 function flycar()
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh then return end
+
     flycarEnabled = not flycarEnabled
     setElementFrozen(veh, flycarEnabled)
     setVehicleTurnVelocity(veh, 0, 0, 0)
-    outputChatBox("[FlyCar] " .. (flycarEnabled and "#00FF00Включен" or "#FF0000Выключен"), 255, 255, 255, true)
+
+    outputChatBox("[FlyCar] " .. (flycarEnabled and "#00FF00Включен" or "#FF0000Выключен"), 255,255,255,true)
 end
 
 local function flyCarRender()
     if not flycarEnabled then return end
+
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh or getVehicleController(veh) ~= localPlayer then return end
 
     local x, y, z = getElementPosition(veh)
     local camX, camY, camZ, lookX, lookY, lookZ = getCameraMatrix()
-    
--- Вектор вперед (Direction)
--- 1. Вектор ВПЕРЕД (куда смотрим)
+
+    -- ВПЕРЕД
     local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
     local len = math.sqrt(dx*dx + dy*dy + dz*dz)
     if len == 0 then return end
-    dx, dy, dz = dx/len, dy/len, dz/len
 
-    -- 2. Вектор ВПРАВО (перпендикуляр к 'вперед')
-    -- Поворачиваем вектор (dx, dy) на 90 градусов
-    local rx = dy 
-    local ry = -dx
+    dx, dy, dz = dx / len, dy / len, dz / len
+
+    -- ВПРАВО (исправлено)
+    local rx = -dy
+    local ry = dx
 
     local speed = 0.8
     local boost = getKeyState("lshift") and 2.5 or 1.0
     local s = speed * boost
 
-    -- ВПЕРЕД / НАЗАД (W, S)
-    if getKeyState("w") then x = x + dx * s; y = y + dy * s; z = z + dz * s end
-    if getKeyState("s") then x = x - dx * s; y = y - dy * s; z = z - dz * s end
-    
-    -- ВЛЕВО / ВПРАВО (A, D) - Теперь точно по бокам
-    if getKeyState("d") then x = x + rx * s; y = y + ry * s end
-    if getKeyState("a") then x = x - rx * s; y = y - ry * s end
-    
-    -- ВВЕРХ / ВНИЗ (Space, LCTRL)
+    -- W / S
+    if getKeyState("w") then
+        x = x + dx * s
+        y = y + dy * s
+        z = z + dz * s
+    end
+
+    if getKeyState("s") then
+        x = x - dx * s
+        y = y - dy * s
+        z = z - dz * s
+    end
+
+    -- A / D (теперь правильно)
+    if getKeyState("d") then
+        x = x + rx * s
+        y = y + ry * s
+    end
+
+    if getKeyState("a") then
+        x = x - rx * s
+        y = y - ry * s
+    end
+
+    -- Вверх / вниз
     if getKeyState("space") then z = z + s end
     if getKeyState("lctrl") then z = z - s end
-    
+
     setElementPosition(veh, x, y, z)
-    
-    -- Плавный поворот машины за камерой
+
+    -- Поворот машины
     local rotZ = -math.deg(math.atan2(dx, dy))
     local rotX = math.deg(math.asin(dz))
     setElementRotation(veh, rotX, 0, rotZ)
 end
 
--- Регистрация
 addEventHandler("onClientRender", root, flyCarRender)
--- Если используешь свою систему кэша для релоада:
+
 if _G.GH_Cache and _G.GH_Cache.events then
     _G.GH_Cache.events["flyCarRender"] = { root = root, fn = flyCarRender }
 end
