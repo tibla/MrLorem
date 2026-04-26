@@ -374,38 +374,30 @@ local function flyCarRender()
     dx, dy, dz = dx / len, dy / len, dz / len
 
 -- Боковой вектор (как в твоём примере)
-local rightX, rightY = dy, -dx
+-- 1. Вектор ВПЕРЕД (куда смотрим)
+    local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
+    local len = math.sqrt(dx*dx + dy*dy + dz*dz)
+    if len == 0 then return end
+    dx, dy, dz = dx/len, dy/len, dz/len
 
-local speed = 0.8
-local boost = getKeyState("lshift") and 2.5 or 1.0
-local s = speed * boost
+    -- 2. Вектор ВПРАВО (перпендикуляр к 'вперед')
+    -- Поворачиваем вектор (dx, dy) на 90 градусов
+    local rx = dy 
+    local ry = -dx
 
--- W / S
-if getKeyState("w") then
-    x = x + dx * s
-    y = y + dy * s
-    z = z + dz * s
-end
+    local speed = 0.8
+    local boost = getKeyState("lshift") and 2.5 or 1.0
+    local s = speed * boost
 
-if getKeyState("s") then
-    x = x - dx * s
-    y = y - dy * s
-    z = z - dz * s
-end
-
--- A = влево
-if getKeyState("a") then
-    x = x - rightX * s
-    y = y - rightY * s
-end
-
--- D = вправо
-if getKeyState("d") then
-    x = x + rightX * s
-    y = y + rightY * s
-end
-
-    -- Вверх / вниз
+    -- ВПЕРЕД / НАЗАД (W, S)
+    if getKeyState("w") then x = x + dx * s; y = y + dy * s; z = z + dz * s end
+    if getKeyState("s") then x = x - dx * s; y = y - dy * s; z = z - dz * s end
+    
+    -- ВЛЕВО / ВПРАВО (A, D) - Теперь точно по бокам
+    if getKeyState("d") then x = x + rx * s; y = y + ry * s end
+    if getKeyState("a") then x = x - rx * s; y = y - ry * s end
+    
+    -- ВВЕРХ / ВНИЗ (Space, LCTRL)
     if getKeyState("space") then z = z + s end
     if getKeyState("lctrl") then z = z - s end
 
