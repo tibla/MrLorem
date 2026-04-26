@@ -603,7 +603,7 @@ addMenuButton("🚀 Летать на машине (f6)", flycar, "left")
 addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left")
 addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
 addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "left")
-addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "left")
+addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "right")
 addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "left")
 addMenuButton("Устроиться на Очищувать", snowblower, "center")
 
