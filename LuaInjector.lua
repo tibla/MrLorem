@@ -630,6 +630,17 @@ addEventHandler("onClientGUIClick", btnReloadRemote, function()
         end
     end)
 end, false)
+local function speedBoost()
+    local veh = getPedOccupiedVehicle(localPlayer)
+    if not veh or getVehicleController(veh) ~= localPlayer then return end
+    local sx, sy, sz = getElementVelocity(veh)
+    setElementVelocity(veh, sx*1.5, sy*1.5, sz)
+end
+
+-- отдельный бинд на клавишу
+bindKey("lshift", "down", function()
+    speedBoost()
+end)
 
 -- Открытие на F9
 bindKey("f9", "down", function()
