@@ -630,17 +630,29 @@ addEventHandler("onClientGUIClick", btnReloadRemote, function()
         end
     end)
 end, false)
+-- Сама функция буста
 local function speedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh or getVehicleController(veh) ~= localPlayer then return end
+    
     local sx, sy, sz = getElementVelocity(veh)
-    setElementVelocity(veh, sx*1.2, sy*1.2, sz)
+    -- Множитель 1.2 — это +20% к текущей скорости
+    setElementVelocity(veh, sx * 1.2, sy * 1.2, sz)
 end
 
--- отдельный бинд на клавишу
-bindKey("lshift", "down", function()
-    speedBoost()
-end)
+-- Сохраняем функцию в кэш, если таблица существует
+if _G.GH_Cache and _G.GH_Cache.functions then
+    _G.GH_Cache.functions["speedBoost"] = speedBoost
+end
+
+-- Регистрация бинда
+local bindKeyName = "lshift"
+bindKey(bindKeyName, "down", speedBoost)
+
+-- Сохраняем бинд в кэш событий/клавиш для корректного удаления при стопе
+if _G.GH_Cache and _G.GH_Cache.binds then
+    _G.GH_Cache.binds["speedBoostBind"] = { key = bindKeyName, state = "down", fn = speedBoost }
+end
 
 -- Открытие на F9
 bindKey("f9", "down", function()
