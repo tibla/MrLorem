@@ -634,7 +634,7 @@ local function speedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh or getVehicleController(veh) ~= localPlayer then return end
     local sx, sy, sz = getElementVelocity(veh)
-    setElementVelocity(veh, sx*1.5, sy*1.5, sz)
+    setElementVelocity(veh, sx*1.2, sy*1.2, sz)
 end
 
 -- отдельный бинд на клавишу
