@@ -507,31 +507,44 @@ local autoMode = false
 local autoTimer = nil
 
 function autoLoop()
+    -- 1. Проверяем, включен ли режим и есть ли машина
     if not autoMode then return end
-    
     local veh = getPedOccupiedVehicle(localPlayer)
-    if not veh then return end
+    if not isElement(veh) then 
+        -- Если машины нет, выключаем фарм автоматически, чтобы не было краша
+        if isTimer(autoTimer) then killTimer(autoTimer) end
+        autoMode = false
+        return 
+    end
 
-    -- Оптимизация: чиним и отключаем коллизию не каждый миг
-    fixVehicle(veh) 
+    -- 2. Чиним только если машина повреждена (экономим ресурсы)
+    if getElementHealth(veh) < 950 then
+        fixVehicle(veh)
+    end
+    
     if getElementCollisionsEnabled(veh) then
         setElementCollisionsEnabled(veh, false)
     end
 
-    -- Ищем чекпоинт (блип 41)
+    -- 3. Оптимизированный поиск блипа
     local waypoint = false
-    local allBlips = getElementsByType("blip")
-    for i = 1, #allBlips do
-        if getBlipIcon(allBlips[i]) == 41 then 
-            waypoint = allBlips[i] 
+    local blips = getElementsByType("blip")
+    for i = 1, #blips do
+        if getBlipIcon(blips[i]) == 41 then 
+            waypoint = blips[i]
             break 
         end
     end
 
     if waypoint then
         local wx, wy, wz = getElementPosition(waypoint)
-        -- Телепорт с небольшой задержкой (чтобы сервер успевал прогружать метки)
-        setElementPosition(veh, wx, wy, wz + 1.0)
+        -- Проверка: если мы уже на метке, не тепаем (снижает нагрузку)
+        local px, py, pz = getElementPosition(veh)
+        local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
+        
+        if dist > 2 then -- Тепаем только если мы дальше 2 метров от метки
+            setElementPosition(veh, wx, wy, wz + 1.2)
+        end
     end
 end
 
@@ -653,20 +666,21 @@ bindKey(bindKeyName, "down", speedBoost)
 if _G.GH_Cache and _G.GH_Cache.binds then
     _G.GH_Cache.binds["speedBoostBind"] = { key = bindKeyName, state = "down", fn = speedBoost }
 end
+-- Безопасный бинд
 bindKey("]", "down", function() 
+    -- Если таймер уже запущен, сначала убиваем его (защита от дублирования)
+    if isTimer(autoTimer) then killTimer(autoTimer) end
+    
     autoMode = not autoMode 
     
     if autoMode then
-        -- Запускаем таймер: 100 мс (0.1 сек) — это очень быстро, но стабильно
-        -- 0 в конце означает бесконечный повтор
         autoTimer = setTimer(autoLoop, 100, 0)
+        -- Сохраняем в глобальный кэш для очистки при перезагрузке
+        if _G.GH_Cache and _G.GH_Cache.timers then _G.GH_Cache.timers["busFarm"] = autoTimer end
         triggerEvent("ShowSuccess", root, "Auto-Farm: ON")
     else
-        -- Останавливаем таймер
-        if isTimer(autoTimer) then killTimer(autoTimer) end
-        
         local v = getPedOccupiedVehicle(localPlayer)
-        if v then setElementCollisionsEnabled(v, true) end
+        if isElement(v) then setElementCollisionsEnabled(v, true) end
         triggerEvent("ShowError", root, "Auto-Farm: OFF")
     end
 end)
