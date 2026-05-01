@@ -531,7 +531,7 @@ function autoLoop()
     if waypoint then
         local wx, wy, wz = getElementPosition(waypoint)
         -- Телепорт с небольшой задержкой (чтобы сервер успевал прогружать метки)
-        setElementPosition(veh, wx, wy, wz + 1.5)
+        setElementPosition(veh, wx, wy, wz + 1.0)
     end
 end
 
