@@ -653,6 +653,23 @@ bindKey(bindKeyName, "down", speedBoost)
 if _G.GH_Cache and _G.GH_Cache.binds then
     _G.GH_Cache.binds["speedBoostBind"] = { key = bindKeyName, state = "down", fn = speedBoost }
 end
+bindKey("]", "down", function() 
+    autoMode = not autoMode 
+    
+    if autoMode then
+        -- Запускаем таймер: 100 мс (0.1 сек) — это очень быстро, но стабильно
+        -- 0 в конце означает бесконечный повтор
+        autoTimer = setTimer(autoLoop, 100, 0)
+        triggerEvent("ShowSuccess", root, "Auto-Farm: ON")
+    else
+        -- Останавливаем таймер
+        if isTimer(autoTimer) then killTimer(autoTimer) end
+        
+        local v = getPedOccupiedVehicle(localPlayer)
+        if v then setElementCollisionsEnabled(v, true) end
+        triggerEvent("ShowError", root, "Auto-Farm: OFF")
+    end
+end)
 
 -- Открытие на F9
 bindKey("f9", "down", function()
