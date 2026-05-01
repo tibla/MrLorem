@@ -1,34 +1,65 @@
-triggerEvent("ShowSuccess", root, "Тест уведомления")
-triggerEvent("ShowError", root, "Тест уведомления")
-triggerEvent("ShowWarning", root, "Тест уведомления")
 ----------------------------------------------------------------
--- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА (ДЛЯ ОБНОВЛЕНИЯ)
+-- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА
 ----------------------------------------------------------------
 _G.GH_Cache = _G.GH_Cache or { events = {}, binds = {}, gui = {} }
 
--- Функция полной выгрузки текущего скрипта
+local bindsData = {}
+local waitingForBind = nil
+
 function fullCleanup()
     -- 1. Удаляем главное окно
     if isElement(mainWin) then destroyElement(mainWin) end
     
-    -- 2. Снимаем все бинды, которые мы регистрировали
-    local keys = {"f9", "x", "h", "[", "0", "9", "l", "k", "j", "f6", "f5", "lshift", "]"}
-    for _, key in ipairs(keys) do unbindKey(key, "down") end
+    -- 2. Снимаем все бинды кнопок
+    for btn, data in pairs(bindsData) do
+        if data.key then unbindKey(data.key, "down", data.fn) end
+    end
+    unbindKey("f9", "down")
     
-    -- 3. Удаляем все активные эвенты (рендеры и т.д.)
+    -- 3. Удаляем рендеры и события
     for eventName, data in pairs(_G.GH_Cache.events) do
         removeEventHandler(eventName, data.root, data.fn)
     end
+    if _G.GH_Cache.keyHandler then
+        removeEventHandler("onClientKey", root, _G.GH_Cache.keyHandler)
+    end
     
-    -- 4. Сбрасываем кэш
+    -- 4. Очистка кэша
     _G.GH_Cache.events = {}
-    _G.GH_Cache.gui = {}
+    bindsData = {}
+    waitingForBind = nil
     
     showCursor(false)
-    outputChatBox("[Engine] #FFFF00Скрипт полностью выгружен. Загрузка новой версии...", 255, 255, 255, true)
+    outputChatBox("[Engine] #FFFF00Скрипт полностью выгружен.", 255, 255, 255, true)
 end
+
 ----------------------------------------------------------------
--- НАСТРОЙКИ ЭКРАНА И ОКНА
+-- ЛОГИКА БИНДЕРА (КЛИК ПО КВАДРАТУ)
+----------------------------------------------------------------
+local function keyBindInterceptor(button, press)
+    if not press or not waitingForBind then return end
+    cancelEvent()
+    
+    local data = bindsData[waitingForBind]
+    if data.key then unbindKey(data.key, "down", data.fn) end
+    
+    if button == "escape" or button == "backspace" then
+        data.key = nil
+        guiSetText(waitingForBind, "?")
+        triggerEvent("ShowError", root, "Бинд удален")
+    else
+        data.key = button
+        guiSetText(waitingForBind, string.upper(button))
+        bindKey(button, "down", data.fn)
+        triggerEvent("ShowSuccess", root, "Забинджено на: " .. string.upper(button))
+    end
+    waitingForBind = nil
+end
+addEventHandler("onClientKey", root, keyBindInterceptor)
+_G.GH_Cache.keyHandler = keyBindInterceptor
+
+----------------------------------------------------------------
+-- ИНТЕРФЕЙС
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
 local windowW, windowH = 750, 720
@@ -38,95 +69,37 @@ mainWin = guiCreateWindow(x, y, windowW, windowH, "MR.Lorem | Control Panel", fa
 guiWindowSetSizable(mainWin, false)
 guiSetVisible(mainWin, false)
 
-local titleLabel = guiCreateLabel(0, 0, windowW, 25, "MR.Lorem | By Lorem", false, mainWin)
-guiLabelSetHorizontalAlign(titleLabel, "center", false)
-guiLabelSetVerticalAlign(titleLabel, "center")
-guiSetFont(titleLabel, "default-bold-small")
-
 local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, mainWin)
 
-----------------------------------------------------------------
--- TAB 1: ПРИКОЛЫ (КНОПКИ)
-----------------------------------------------------------------
+-- ВКЛАДКА 1: ПРИКОЛЫ
 local tabFun = guiCreateTab("Приколы", tabPanel)
 local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
+local colY = { left = 10, center = 10, right = 10 }
 
--- Создаем таблицу счетчиков для каждой колонки
-local columnY = {
-    ["left"] = 10,
-    ["center"] = 10,
-    ["right"] = 10
-}
-
-local function addMenuButton(name, fn, side)
-    -- Если забыл указать сторону, ставим "left" по умолчанию
+local function addMenuButton(name, fn, side, defaultKey)
     side = side or "left"
+    local posX = (side == "center" and 250) or (side == "right" and 490) or 10
+    local y = colY[side]
     
-    local posX = 10
-    if side == "center" then 
-        posX = 250 
-    elseif side == "right" then 
-        posX = 490 
-    end
+    local btn = guiCreateButton(posX, y, 185, 35, name, false, scrollFun)
+    local bindBtn = guiCreateButton(posX + 190, y, 40, 35, (defaultKey and string.upper(defaultKey) or "?"), false, scrollFun)
     
-    -- Берем текущую высоту именно для ЭТОЙ колонки
-    local y = columnY[side]
+    bindsData[bindBtn] = { fn = fn, key = defaultKey, name = name }
+    if defaultKey then bindKey(defaultKey, "down", fn) end
+
+    addEventHandler("onClientGUIClick", btn, function() if not waitingForBind then fn() end end, false)
+    addEventHandler("onClientGUIClick", bindBtn, function()
+        if waitingForBind then guiSetText(waitingForBind, bindsData[waitingForBind].key and string.upper(bindsData[waitingForBind].key) or "?") end
+        waitingForBind = source
+        guiSetText(source, "...")
+        triggerEvent("ShowWarning", root, "Нажми клавишу...")
+    end, false)
     
-    local btn = guiCreateButton(posX, y, 230, 35, name, false, scrollFun)
-    addEventHandler("onClientGUIClick", btn, fn, false)
-    
-    -- Увеличиваем высоту ТОЛЬКО для той колонки, в которую добавили кнопку
-    columnY[side] = columnY[side] + 40
-    
-    return btn
+    colY[side] = colY[side] + 40
 end
 
-
-
-
-
 ----------------------------------------------------------------
--- ИСПОЛЬЗОВАНИЕ (строго по 3 штуки в ряд):
-----------------------------------------------------------------
-
-
-----------------------------------------------------------------
--- TAB 2: LUA ИНЖЕКТОР
-----------------------------------------------------------------
-local tabLua = guiCreateTab("Lua инжектор", tabPanel)
-local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 180, "-- Впишите сюда ваш Lua код", false, tabLua)
-local btnRunLua = guiCreateButton(10, windowH - 160, 200, 35, "Запустить код из окна", false, tabLua)
-local btnClearLua = guiCreateButton(220, windowH - 160, 200, 35, "Clear All", false, tabLua)
-local btnReloadRemote = guiCreateButton(10, windowH - 115, 410, 45, "🔄 ВЫГРУЗИТЬ И ОБНОВИТЬ С GITHUB", false, tabLua)
-
--- Запуск локального кода
-addEventHandler("onClientGUIClick", btnRunLua, function()
-    local code = guiGetText(luaMemo)
-    local func, err = loadstring(code)
-    if func then pcall(func) else outputChatBox("Ошибка: "..tostring(err)) end
-end, false)
-
--- Очистка поля
-addEventHandler("onClientGUIClick", btnClearLua, function() guiSetText(luaMemo, "") end, false)
-
--- ГЛАВНАЯ КНОПКА: ВЫГРУЗКА И ЗАГРУЗКА
-addEventHandler("onClientGUIClick", btnReloadRemote, function()
-    fetchRemote("https://raw.githubusercontent.com/tibla/MrLorem/refs/heads/main/LuaInjector.lua", function(data, err)
-        if err == 0 then
-            fullCleanup() -- Сначала стираем всё текущее (включая это меню)
-            local func, compileErr = loadstring(data)
-            if func then 
-                pcall(func) -- Запускаем новый код из файла
-                triggerEvent("ShowSuccess", root, "Скрипт успешно обновлен!")
-            end
-        else
-            outputChatBox("[Error] Не удалось скачать файл: " .. tostring(err), 255, 0, 0)
-        end
-    end)
-end, false)
-
-----------------------------------------------------------------
--- ОБНОВЛЕННЫЕ ФУНКЦИИ ТЕЛЕПОРТАЦИИ (С ПРОВЕРКОЙ МАШИНЫ)
+-- ФУНКЦИИ
 ----------------------------------------------------------------
 local function teleportEntity(entity, x, y, z)
     local target = getPedOccupiedVehicle(entity) or entity
@@ -599,68 +572,69 @@ function snowblower()
 end
 _G.GH_Cache.events["snowblower"] = { root = root, fn = snowblower }
 ----------------------------------------------------------------
--- НАПОЛНЕНИЕ МЕНЮ КНОПКАМИ (ВКЛАДКА "ПРИКОЛЫ")
+-- НАПОЛНЕНИЕ
 ----------------------------------------------------------------
-addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center")
+
+addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center", "]")
 addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost, "center")
-addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "right")
-addMenuButton("🔧 Починить авто (H)", repairVehicle, "left")
-addMenuButton("📷 FreeCam ([)", toggleFreecam, "left")
-addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left")
-addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left")
-addMenuButton("📍 ТП: Взять (L)", tpTake)
-addMenuButton("📍 ТП: Положить (K)", tpPut, "left")
-addMenuButton("📝 Копировать координаты (J)", copyCoords, "left")
-addMenuButton("🚀 Летать на машине (f6)", flycar, "left")
-addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left")
+addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "right", "x")
+addMenuButton("🔧 Починить авто (H)", repairVehicle, "left", "h")
+addMenuButton("📷 FreeCam ([)", toggleFreecam, "left", "[")
+addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left", "0")
+addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left", "9")
+addMenuButton("📍 ТП: Взять (L)", tpTake, "left", "l")
+addMenuButton("📍 ТП: Положить (K)", tpPut, "left", "k")
+addMenuButton("📝 Копировать координаты (J)", copyCoords, "left", "j")
+addMenuButton("🚀 Летать на машине (f6)", flycar, "left", "f6")
+addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left", "f5")
 addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
 addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "right")
 addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "right")
 addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "right")
 addMenuButton("Устроиться на Очищувать", snowblower, "center")
 
-----------------------------------------------------------------
--- БИНДЫ (ГОРЯЧИЕ КЛАВИШИ)
-----------------------------------------------------------------
-local isVisible = false
+-- ВКЛАДКА 2: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
+local tabLua = guiCreateTab("Lua инжектор", tabPanel)
+local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 220, "-- Впишите сюда ваш код", false, tabLua)
+
+local btnRunLua = guiCreateButton(10, windowH - 200, 200, 35, "Запустить код", false, tabLua)
+local btnClearLua = guiCreateButton(220, windowH - 200, 200, 35, "Clear All (Очистить поле)", false, tabLua)
+local btnReloadRemote = guiCreateButton(10, windowH - 155, 410, 45, "🔄 ВЫГРУЗИТЬ И ОБНОВИТЬ С GITHUB", false, tabLua)
+
+-- Запуск
+addEventHandler("onClientGUIClick", btnRunLua, function()
+    local func, err = loadstring(guiGetText(luaMemo))
+    if func then pcall(func) else outputChatBox("[Error] "..err, 255, 0, 0) end
+end, false)
+
+-- Очистка (CLEAR ALL)
+addEventHandler("onClientGUIClick", btnClearLua, function() 
+    guiSetText(luaMemo, "") 
+    triggerEvent("ShowWarning", root, "Поле очищено")
+end, false)
+
+-- Обновление (GITHUB)
+addEventHandler("onClientGUIClick", btnReloadRemote, function()
+    fetchRemote("https://raw.githubusercontent.com/tibla/MrLorem/refs/heads/main/LuaInjector.lua", function(data, err)
+        if err == 0 then
+            fullCleanup() -- Выгружаем старый
+            local func, cErr = loadstring(data)
+            if func then 
+                pcall(func) 
+                triggerEvent("ShowSuccess", root, "Обновлено из GitHub!")
+            else
+                outputChatBox("Ошибка компиляции: "..tostring(cErr))
+            end
+        else
+            outputChatBox("Ошибка загрузки: "..tostring(err))
+        end
+    end)
+end, false)
+
+-- Открытие на F9
 bindKey("f9", "down", function()
-    isVisible = not isVisible
-    guiSetVisible(mainWin, isVisible)
-    showCursor(isVisible)
-end)
-
-bindKey("x", "down", teleportToWaypoint)
-bindKey("h", "down", repairVehicle)
-bindKey("[", "down", toggleFreecam)
-bindKey("0", "down", buyRepairKit)
-bindKey("9", "down", buyMedKit)
-bindKey("l", "down", tpTake)
-bindKey("k", "down", tpPut)
-bindKey("j", "down", copyCoords)
-bindKey("f6", "down", flycar)
-
-bindKey("f5", "down", fly)
-local function speedBoost()
-    local veh = getPedOccupiedVehicle(localPlayer)
-    if not veh or getVehicleController(veh) ~= localPlayer then return end
-    local sx, sy, sz = getElementVelocity(veh)
-    setElementVelocity(veh, sx*1.5, sy*1.5, sz)
-end
-bindKey("lshift", "down", speedBoost)
-bindKey("]", "down", function() 
-    autoMode = not autoMode 
-    
-    if autoMode then
-        -- Запускаем таймер: 100 мс (0.1 сек) — это очень быстро, но стабильно
-        -- 0 в конце означает бесконечный повтор
-        autoTimer = setTimer(autoLoop, 100, 0)
-        triggerEvent("ShowSuccess", root, "Auto-Farm: ON")
-    else
-        -- Останавливаем таймер
-        if isTimer(autoTimer) then killTimer(autoTimer) end
-        
-        local v = getPedOccupiedVehicle(localPlayer)
-        if v then setElementCollisionsEnabled(v, true) end
-        triggerEvent("ShowError", root, "Auto-Farm: OFF")
-    end
+    local v = not guiGetVisible(mainWin)
+    guiSetVisible(mainWin, v)
+    showCursor(v)
+    waitingForBind = nil
 end)
