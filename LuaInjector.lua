@@ -543,7 +543,7 @@ function autoLoop()
         local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
         
         if dist > 2 then -- Тепаем только если мы дальше 2 метров от метки
-            setElementPosition(veh, wx, wy, wz + 1.2)
+            setElementPosition(veh, wx, wy, wz + 1)
         end
     end
 end
