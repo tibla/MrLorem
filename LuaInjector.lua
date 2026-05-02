@@ -507,26 +507,19 @@ local autoMode = false
 local autoTimer = nil
 
 function autoLoop()
-    -- 1. Проверяем, включен ли режим и есть ли машина
     if not autoMode then return end
     local veh = getPedOccupiedVehicle(localPlayer)
     if not isElement(veh) then 
-        -- Если машины нет, выключаем фарм автоматически, чтобы не было краша
         if isTimer(autoTimer) then killTimer(autoTimer) end
         autoMode = false
         return 
     end
 
-    -- 2. Чиним только если машина повреждена (экономим ресурсы)
-    if getElementHealth(veh) < 950 then
-        fixVehicle(veh)
-    end
+    fixVehicle(veh)
     
-    if getElementCollisionsEnabled(veh) then
-        setElementCollisionsEnabled(veh, false)
-    end
+    -- Отключаем коллизию КАЖДЫЙ тик, пока работаем
+    setElementCollisionsEnabled(veh, false)
 
-    -- 3. Оптимизированный поиск блипа
     local waypoint = false
     local blips = getElementsByType("blip")
     for i = 1, #blips do
@@ -536,23 +529,28 @@ function autoLoop()
         end
     end
 
-if waypoint then
+    if waypoint then
         local wx, wy, wz = getElementPosition(waypoint)
         local px, py, pz = getElementPosition(veh)
         local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
         
-        if dist > 2 then 
-            -- 1. Убираем инерцию (чтобы не взлетать)
+        if dist > 1.5 then 
+            -- 1. Полностью обнуляем скорость (включая вращение)
             setElementVelocity(veh, 0, 0, 0)
+            setVehicleTurnVelocity(veh, 0, 0, 0)
+
+            -- 2. Телепорт (ставим высоту ЧУТЬ ниже, 0.5 вместо 1.2, чтобы не падать)
+            setElementPosition(veh, wx, wy, wz + 0.5)
+
+            -- 3. Выравниваем колеса ровно по горизонту
+            setElementRotation(veh, 0, 0, getPedRotation(localPlayer))
             
-            -- 2. Телепортируем
-            setElementPosition(veh, wx, wy, wz + 1.2)
-            
-            -- 3. Дополнительно: выравниваем машину ровно (чтобы не кувыркалась)
-            local _, _, rz = getElementRotation(veh)
-            setElementRotation(veh, 0, 0, rz)
+            -- 4. Маленький лайфхак: если всё равно летит, "примораживаем" на кадр
+            -- setElementFrozen(veh, true)
+            -- setTimer(setElementFrozen, 50, 1, veh, false)
         end
     end
+end
 
 function smartMarketGhost()
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
