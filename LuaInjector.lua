@@ -189,6 +189,17 @@ function buyMedKit()
     triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket={[5]=1}, business_id="drugstore_5", type_pay=1, type_product=4})
     outputChatBox("[Engine] #00FF00Запрос на аптечку отправлен!", 255, 255, 255, true)
 end
+function buylunch()
+ triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
+    basket = {
+      [5] = 1
+    },
+    business_id = "shop_10",
+    type_pay = 1,
+    type_product = 1
+  } )
+    outputChatBox("[Engine] #00FF00Запрос на Ланч отправлен!", 255, 255, 255, true)
+end
 
 ----------------------------------------------------------------
 -- FREECAM
@@ -599,6 +610,7 @@ addMenuButton("🔧 Починить авто (H)", repairVehicle, "left", "h")
 addMenuButton("📷 FreeCam ([)", toggleFreecam, "left", "[")
 addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left", "0")
 addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left", "9")
+addMenuButton("🩹 Купить Кушать 2к (8)", buylunch, "left", "8")
 addMenuButton("📍 ТП: Взять (L)", tpTake, "left", "l")
 addMenuButton("📍 ТП: Положить (K)", tpPut, "left", "k")
 addMenuButton("📝 Копировать координаты (J)", copyCoords, "left", "j")
