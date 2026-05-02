@@ -599,11 +599,16 @@ function snowblower()
     triggerServerEvent ( "SnowBlower.StartJob", localPlayer )
 end
 _G.GH_Cache.events["snowblower"] = { root = root, fn = snowblower }
+
+function sailor()
+    triggerServerEvent ( "Jobs:SailorStart", localPlayer )
+end
+_G.GH_Cache.events["sailor"] = { root = root, fn = sailor }
+
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ
 ----------------------------------------------------------------
 
-addMenuButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center", "]")
 addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost, "center")
 addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "right", "x")
 addMenuButton("🔧 Починить авто (H)", repairVehicle, "left", "h")
@@ -620,9 +625,40 @@ addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
 addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "right")
 addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "right")
 addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "right")
-addMenuButton("Устроиться на Очищувать", snowblower, "center")
 
--- ВКЛАДКА 2: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
+--2
+-- ВКЛАДКА: РАБОТЫ
+local tabJobs = guiCreateTab("Работы", tabPanel)
+local scrollJobs = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabJobs)
+local colYJobs = { left = 10, center = 10, right = 10 } -- Таблица высот для колонок
+
+local function addJobButton(name, fn, side, defaultKey)
+    side = side or "left"
+    local posX = (side == "center" and 250) or (side == "right" and 490) or 10
+    local y = colYJobs[side]
+    
+    local btn = guiCreateButton(posX, y, 185, 35, name, false, scrollJobs)
+    local bindBtn = guiCreateButton(posX + 190, y, 40, 35, (defaultKey and string.upper(defaultKey) or "?"), false, scrollJobs)
+    
+    bindsData[bindBtn] = { fn = fn, key = defaultKey, name = name }
+    if defaultKey then bindKey(defaultKey, "down", fn) end
+
+    addEventHandler("onClientGUIClick", btn, function() if not waitingForBind then fn() end end, false)
+    addEventHandler("onClientGUIClick", bindBtn, function()
+        if waitingForBind then guiSetText(waitingForBind, bindsData[waitingForBind].key and string.upper(bindsData[waitingForBind].key) or "?") end
+        waitingForBind = source
+        guiSetText(source, "...")
+        triggerEvent("ShowWarning", root, "Нажми клавишу...")
+    end, false)
+    
+    colYJobs[side] = colYJobs[side] + 40
+end
+
+addJobButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center", "]")
+addJobButton("❄️ Очиститель снега", snowblower, "left")
+addJobButton("🚢 Теплоход", sailor, "right")
+-- ВКЛАДКА 3: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
+
 local tabLua = guiCreateTab("Lua инжектор", tabPanel)
 local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 220, "-- Впишите сюда ваш код", false, tabLua)
 
