@@ -536,17 +536,23 @@ function autoLoop()
         end
     end
 
-    if waypoint then
+if waypoint then
         local wx, wy, wz = getElementPosition(waypoint)
-        -- Проверка: если мы уже на метке, не тепаем (снижает нагрузку)
         local px, py, pz = getElementPosition(veh)
         local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
         
-        if dist > 2 then -- Тепаем только если мы дальше 2 метров от метки
-            setElementPosition(veh, wx, wy, wz + 1)
+        if dist > 2 then 
+            -- 1. Убираем инерцию (чтобы не взлетать)
+            setElementVelocity(veh, 0, 0, 0)
+            
+            -- 2. Телепортируем
+            setElementPosition(veh, wx, wy, wz + 1.2)
+            
+            -- 3. Дополнительно: выравниваем машину ровно (чтобы не кувыркалась)
+            local _, _, rz = getElementRotation(veh)
+            setElementRotation(veh, 0, 0, rz)
         end
     end
-end
 
 function smartMarketGhost()
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
