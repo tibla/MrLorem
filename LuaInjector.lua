@@ -507,46 +507,49 @@ local autoMode = false
 local autoTimer = nil
 
 function autoLoop()
-    -- 1. Проверяем, включен ли режим и есть ли машина
-    if not autoMode then return end
-    local veh = getPedOccupiedVehicle(localPlayer)
-    if not isElement(veh) then 
-        -- Если машины нет, выключаем фарм автоматически, чтобы не было краша
-        if isTimer(autoTimer) then killTimer(autoTimer) end
-        autoMode = false
-        return 
-    end
+    -- 1. Проверяем, включен ли режим и есть ли машина
+    if not autoMode then return end
+    
+    local veh = getPedOccupiedVehicle(localPlayer)
+    if not isElement(veh) then 
+        if isTimer(autoTimer) then killTimer(autoTimer) end
+        autoMode = false
+        return 
+    end
 
-    -- 2. Чиним только если машина повреждена (экономим ресурсы)
-    if getElementHealth(veh) < 950 then
-        fixVehicle(veh)
-    end
-    
-    if getElementCollisionsEnabled(veh) then
-        setElementCollisionsEnabled(veh, false)
-    end
+    -- 2. Чиним и отключаем коллизию
+    if getElementHealth(veh) < 950 then
+        fixVehicle(veh)
+    end
+    
+    if getElementCollisionsEnabled(veh) then
+        setElementCollisionsEnabled(veh, false)
+    end
 
-    -- 3. Оптимизированный поиск блипа
-    local waypoint = false
-    local blips = getElementsByType("blip")
-    for i = 1, #blips do
-        if getBlipIcon(blips[i]) == 41 then 
-            waypoint = blips[i]
-            break 
-        end
-    end
+    -- 3. Поиск блипа
+    local waypoint = false
+    local blips = getElementsByType("blip")
+    for i = 1, #blips do
+        if getBlipIcon(blips[i]) == 41 then 
+            waypoint = blips[i]
+            break 
+        end
+    end
 
-    if waypoint then
-        local wx, wy, wz = getElementPosition(waypoint)
-        -- Проверка: если мы уже на метке, не тепаем (снижает нагрузку)
-        local px, py, pz = getElementPosition(veh)
-        local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
-        
-        if dist > 2 then -- Тепаем только если мы дальше 2 метров от метки
-            setElementPosition(veh, wx, wy, wz + 1.2)
-        end
-    end
-end
+    -- 4. Логика телепорта
+    if waypoint then
+        local wx, wy, wz = getElementPosition(waypoint)
+        local px, py, pz = getElementPosition(veh)
+        local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
+        
+        if dist > 2 then
+            -- Обнуляем скорость, чтобы не "выстреливать" в небо
+            setElementVelocity(veh, 0, 0, 0)
+            setElementPosition(veh, wx, wy, wz + 1.0)
+        end
+    end -- Этот end закрывает "if waypoint"
+end -- Этот end закрывает "function autoLoop"
+
 
 
 function smartMarketGhost()
