@@ -632,25 +632,22 @@ triggerServerEvent ( "ivent_quest_halloween_step_10", localPlayer )
 end
 function school()
     triggerServerEvent ( "PlayeStartQuest_ivent_quest_school_1", localPlayer )
-triggerServerEvent ( "ivent_quest_halloween_step_1", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_1", localPlayer )
 
-triggerServerEvent ( "ivent_quest_halloween_step_2", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_3", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_4", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_5", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_6", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_7", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_8", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_9", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_10", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_2", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_3", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_4", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_5", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_6", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_7", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_8", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_9", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_10", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_11", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_12", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_13", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_14", localPlayer )
+triggerServerEvent ( "ivent_quest_school_1_step_15", localPlayer )
 end
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ
@@ -661,6 +658,7 @@ addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "ri
 addMenuButton("🔧 Починить авто (H)", repairVehicle, "left", "h")
 addMenuButton("📷 FreeCam ([)", toggleFreecam, "left", "[")
 addMenuButton("hallowen", hallowen, "center")
+addMenuButton("school", school, "center")
 addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left", "0")
 addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left", "9")
 addMenuButton("🩹 Купить Кушать 2к (8)", buylunch, "left", "8")
