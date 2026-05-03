@@ -597,6 +597,32 @@ function smartMarketGhost()
     end, 1150, 1)
 end
 
+function toggleEngine()
+    local vehicle = getPedOccupiedVehicle(localPlayer)
+
+    if vehicle then
+        -- Проверяем, является ли игрок водителем (сиденье 0)
+        if getVehicleOccupant(vehicle, 0) == localPlayer then
+            -- Считываем текущее состояние и инвертируем его
+            local currentState = getVehicleEngineState(vehicle)
+            local newState = not currentState
+            
+            setVehicleEngineState(vehicle, newState)
+            
+            if newState then
+                outputChatBox("Двигатель запущен", 0, 255, 0)
+            else
+                outputChatBox("Двигатель заглушен", 255, 255, 0)
+            end
+        else
+            outputChatBox("Вы должны быть за рулем, чтобы управлять двигателем", 255, 100, 0)
+        end
+    else
+        outputChatBox("Ты не в машине", 255, 0, 0)
+    end
+end
+_G.GH_Cache.events["toggleEngine"] = { root = root, fn = toggleEngine }
+
 -- Регистрация в кэше
 _G.GH_Cache.events["smartMarketGhost"] = { root = root, fn = smartMarketGhost }
 function snowblower()
@@ -667,6 +693,7 @@ addMenuButton("📍 ТП: Положить (K)", tpPut, "left", "k")
 addMenuButton("📝 Копировать координаты (J)", copyCoords, "left", "j")
 addMenuButton("🚀 Летать на машине (f6)", flycar, "left", "f6")
 addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left", "f5")
+addMenuButton("ЗАПУСК ЧУЖОЙ ТАЧКИ", toggleEngine, "center", "7")
 addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
 addMenuButton("ТП К РИЕЛТОРУ!!!", rielt, "left")
 addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "right")
