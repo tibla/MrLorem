@@ -592,9 +592,9 @@ function smartMarketGhost()
                     setElementDimension(target, 0)
                     outputChatBox("[Engine] #FF0000Мир сброшен на 0:0!", 255, 255, 255, true)
                 end
-            end, 2000, 1)
+            end, 3000, 1)
         end
-    end, 150, 1)
+    end, 1150, 1)
 end
 
 -- Регистрация в кэше
