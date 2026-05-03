@@ -161,6 +161,10 @@ function tpPut()
     teleportEntity(localPlayer, 776.723, -1581.878, 47.749)
     outputChatBox("[Engine] #00FF00ТП на точку 'Положить' (с машиной)!", 255, 255, 255, true)
 end
+function rielt()
+    triggerServerEvent ( "PlayerEnterToRealtor", root, 1 )
+    outputChatBox("[Engine] #00FF00ТП на rielt", 255, 255, 255, true)
+end
 
 function repairVehicle()
     local veh = getPedOccupiedVehicle(localPlayer)
@@ -571,7 +575,7 @@ function smartMarketGhost()
     local rx, ry, rz = getElementRotation(target)
 
     -- 2. Летим на биржу (сервер дает Dim 50, Int 1)
-    rynok() 
+    rielt() 
     outputChatBox("[Engine] #FFFF00Запрос отправлен. Ждем возврата...", 255, 255, 255, true)
 
     -- 3. Первый таймер: возвращаем тело на старые координаты через 150мс
@@ -622,6 +626,7 @@ addMenuButton("📝 Копировать координаты (J)", copyCoords, 
 addMenuButton("🚀 Летать на машине (f6)", flycar, "left", "f6")
 addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left", "f5")
 addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
+addMenuButton("ТП К РИЕЛТОРУ!!!", rielt, "left")
 addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "right")
 addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "right")
 addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "right")
