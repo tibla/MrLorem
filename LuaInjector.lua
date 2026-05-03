@@ -608,7 +608,50 @@ function sailor()
     triggerServerEvent ( "Jobs:SailorStart", localPlayer )
 end
 _G.GH_Cache.events["sailor"] = { root = root, fn = sailor }
+function hallowen()
+   triggerServerEvent ( "PlayeStartQuest_ivent_quest_halloween", localPlayer )
+triggerServerEvent ( "ivent_quest_halloween_step_1", localPlayer )
 
+triggerServerEvent ( "ivent_quest_halloween_step_2", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_3", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_4", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_5", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_6", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_7", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_8", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_9", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_10", localPlayer )
+end
+function school()
+    triggerServerEvent ( "PlayeStartQuest_ivent_quest_school_1", localPlayer )
+triggerServerEvent ( "ivent_quest_halloween_step_1", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_2", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_3", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_4", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_5", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_6", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_7", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_8", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_9", localPlayer )
+
+triggerServerEvent ( "ivent_quest_halloween_step_10", localPlayer )
+end
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ
 ----------------------------------------------------------------
@@ -617,6 +660,7 @@ addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕ�
 addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "right", "x")
 addMenuButton("🔧 Починить авто (H)", repairVehicle, "left", "h")
 addMenuButton("📷 FreeCam ([)", toggleFreecam, "left", "[")
+addMenuButton("hallowen", hallowen, "center")
 addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left", "0")
 addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left", "9")
 addMenuButton("🩹 Купить Кушать 2к (8)", buylunch, "left", "8")
