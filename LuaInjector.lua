@@ -229,17 +229,19 @@ local found = false
 for _, blip in ipairs(getElementsByType("blip")) do
     if getBlipIcon(blip) == 38 then
 
-        local bx, by, bz = getElementPosition(blip)
+        local bx, by = getElementPosition(blip)
 
-        -- ===== КАТЕГОРИЯ 1 =====
+        -- ======================
+        -- КАТЕГОРИЯ 1
+        -- ДИСТАНЦИЯ 70
+        -- ======================
         for _, treasure in ipairs(treasures[1]) do
 
-            local dist = getDistanceBetweenPoints3D(
-                bx, by, bz,
-                treasure.x, treasure.y, treasure.z
+            local dist = getDistanceBetweenPoints2D(
+                bx, by,
+                treasure.x, treasure.y
             )
 
-            -- дистанция 70
             if dist <= 70 then
 
                 setElementPosition(
@@ -256,17 +258,20 @@ for _, blip in ipairs(getElementsByType("blip")) do
             end
         end
 
-        -- ===== КАТЕГОРИЯ 2 =====
+        -- ======================
+        -- КАТЕГОРИЯ 2
+        -- ДИСТАНЦИЯ 20
+        -- ======================
         if not found then
+
             for _, treasure in ipairs(treasures[2]) do
 
-                local dist = getDistanceBetweenPoints3D(
-                    bx, by, bz,
-                    treasure.x, treasure.y, treasure.z
+                local dist = getDistanceBetweenPoints2D(
+                    bx, by,
+                    treasure.x, treasure.y
                 )
 
-                -- дистанция 20
-                if dist <= 140 then
+                if dist <= 20 then
 
                     setElementPosition(
                         localPlayer,
