@@ -185,43 +185,37 @@ function copyCoords()
 end
 
 function treasuress()
-
 local treasures = {
-    [1] = {
-        { id = 1, x = -1585.68, y = -2906.87, z = 18.05 },
-        { id = 2, x = -2431.30, y = -2730.91, z = 14.63 },
-        { id = 3, x = -2772.66, y = 2623.64, z = 24.15 },
-        { id = 4, x = -2824.86, y = 553.39, z = 29.91 },
-        { id = 5, x = -2542.85, y = -147.93, z = 3.11 },
-        { id = 6, x = -1960.69, y = 1280.13, z = 16.92 },
-        { id = 7, x = -1657.90, y = 2625.20, z = 10.24 },
-        { id = 8, x = 2224.21, y = 2852.88, z = 21.19 },
-        { id = 9, x = 1106.93, y = 2081.60, z = 17.49 },
-        { id = 10, x = 2743.70, y = 836.65, z = 1.94 },
-        { id = 11, x = 2560.37, y = -28.48, z = 9.14 },
-        { id = 12, x = 1398.96, y = -2793.51, z = 18.16 },
-        { id = 13, x = 703.70, y = -2010.72, z = 23.12 },
-        { id = 14, x = 2110.15, y = -473.74, z = 9.71 },
-        { id = 15, x = 26.14, y = 2025.76, z = 28.84 },
-    },
-
-    [2] = {
-        { id = 1, x = -2490.71, y = 4530.74, z = 3.14 },
-        { id = 2, x = -2198.66, y = 4529.76, z = 3.29 },
-        { id = 3, x = -2267.13, y = 4536.75, z = 3.25 },
-        { id = 4, x = -2613.60, y = 3752.97, z = 2.78 },
-        { id = 5, x = -2699.43, y = 4091.84, z = 3.00 },
-        { id = 6, x = -2646.73, y = 3698.95, z = 3.00 },
-        { id = 7, x = -2760.94, y = 3902.06, z = 3.01 },
-        { id = 8, x = -2776.93, y = 3899.85, z = 3.00 },
-        { id = 9, x = -2700.62, y = 3967.84, z = 3.37 },
-        { id = 10, x = -2700.20, y = 3978.26, z = 3.35 },
-        { id = 11, x = -2594.87, y = 3687.80, z = 3.00 },
-        { id = 12, x = -2028.65, y = 3482.02, z = 10.32 },
-        { id = 13, x = -2232.45, y = 4474.95, z = 3.25 },
-        { id = 14, x = -2287.96, y = 4489.63, z = 3.35 },
-        { id = 15, x = -2432.91, y = 3619.46, z = 3.00 },
-    }
+    { id = 1, x = -1585.68, y = -2906.87, z = 18.05 },
+    { id = 2, x = -2431.30, y = -2730.91, z = 14.63 },
+    { id = 3, x = -2772.66, y = 2623.64, z = 24.15 },
+    { id = 4, x = -2824.86, y = 553.39, z = 29.91 },
+    { id = 5, x = -2542.85, y = -147.93, z = 3.11 },
+    { id = 6, x = -1960.69, y = 1280.13, z = 16.92 },
+    { id = 7, x = -1657.90, y = 2625.20, z = 10.24 },
+    { id = 8, x = 2224.21, y = 2852.88, z = 21.19 },
+    { id = 9, x = 1106.93, y = 2081.60, z = 17.49 },
+    { id = 10, x = 2743.70, y = 836.65, z = 1.94 },
+    { id = 11, x = 2560.37, y = -28.48, z = 9.14 },
+    { id = 12, x = 1398.96, y = -2793.51, z = 18.16 },
+    { id = 13, x = 703.70, y = -2010.72, z = 23.12 },
+    { id = 14, x = 2110.15, y = -473.74, z = 9.71 },
+    { id = 15, x = 26.14, y = 2025.76, z = 28.84 },
+    	{ id = 16, x = -2490.71, y = 4530.74, z = 3.14 },
+		{ id = 17, x = -2198.66, y = 4529.76, z = 3.29 },
+		{ id = 18, x = -2267.13, y = 4536.75, z = 3.25 },
+		{ id = 19, x = -2613.60, y = 3752.97, z = 2.78 },
+		{ id = 20, x = -2699.43, y = 4091.84, z = 3.00 },
+		{ id = 21, x = -2646.73, y = 3698.95, z = 3.00 },
+		{ id = 22, x = -2760.94, y = 3902.06, z = 3.01 },
+		{ id = 23, x = -2776.93, y = 3899.85, z = 3.00 },
+		{ id = 24, x = -2700.62, y = 3967.84, z = 3.37 },
+		{ id = 25, x = -2700.20, y = 3978.26, z = 3.35 },
+		{ id = 26, x = -2594.87, y = 3687.80, z = 3.00 },
+		{ id = 27, x = -2028.65, y = 3482.02, z = 10.32 },
+		{ id = 28, x = -2232.45, y = 4474.95, z = 3.25 },
+		{ id = 29, x = -2287.96, y = 4489.63, z = 3.35 },
+		{ id = 30, x = -2432.91, y = 3619.46, z = 3.00 },
 }
 
 local found = false
@@ -229,21 +223,16 @@ local found = false
 for _, blip in ipairs(getElementsByType("blip")) do
     if getBlipIcon(blip) == 38 then
 
-        local bx, by = getElementPosition(blip)
+        local bx, by, bz = getElementPosition(blip)
 
-        -- ======================
-        -- КАТЕГОРИЯ 1
-        -- ДИСТАНЦИЯ 70
-        -- ======================
-        for _, treasure in ipairs(treasures[1]) do
-
-            local dist = getDistanceBetweenPoints2D(
-                bx, by,
-                treasure.x, treasure.y
+        for _, treasure in ipairs(treasures) do
+            local dist = getDistanceBetweenPoints3D(
+                bx, by, bz,
+                treasure.x, treasure.y, treasure.z
             )
 
-            if dist <= 70 then
-
+            -- blip должен быть рядом с кладом
+            if dist <= 40 then
                 setElementPosition(
                     localPlayer,
                     treasure.x,
@@ -251,40 +240,10 @@ for _, blip in ipairs(getElementsByType("blip")) do
                     treasure.z + 1
                 )
 
-                outputChatBox("Телепорт к кладу [1] ID: " .. treasure.id)
+                outputChatBox("Телепорт к кладу ID: " .. treasure.id)
 
                 found = true
                 break
-            end
-        end
-
-        -- ======================
-        -- КАТЕГОРИЯ 2
-        -- ДИСТАНЦИЯ 20
-        -- ======================
-        if not found then
-
-            for _, treasure in ipairs(treasures[2]) do
-
-                local dist = getDistanceBetweenPoints2D(
-                    bx, by,
-                    treasure.x, treasure.y
-                )
-
-                if dist <= 20 then
-
-                    setElementPosition(
-                        localPlayer,
-                        treasure.x,
-                        treasure.y,
-                        treasure.z + 1
-                    )
-
-                    outputChatBox("Телепорт к кладу [2] ID: " .. treasure.id)
-
-                    found = true
-                    break
-                end
             end
         end
 
@@ -297,7 +256,6 @@ end
 if not found then
     outputChatBox("Клад рядом с blip 38 не найден")
 end
-
 end
 _G.GH_Cache.events["treasuress"] = { root = root, fn = treasuress }
 
