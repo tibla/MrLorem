@@ -920,7 +920,7 @@ local function speedBoost()
     -- Множитель 1.2 — это +20% к текущей скорости
     setElementVelocity(veh, sx * 1.2, sy * 1.2, sz)
 end
-
+_G.GH_Cache.events["speedBoost"] = { root = root, fn = speedBoost }
 -- Сохраняем функцию в кэш, если таблица существует
 if _G.GH_Cache and _G.GH_Cache.functions then
     _G.GH_Cache.functions["speedBoost"] = speedBoost
