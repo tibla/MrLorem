@@ -184,6 +184,66 @@ function copyCoords()
     outputChatBox("[Engine] #00FF00Координаты скопированы в буфер!", 255, 255, 255, true)
 end
 
+function treasuress()
+local treasures = {
+    { id = 1, x = -1585.68, y = -2906.87, z = 18.05 },
+    { id = 2, x = -2431.30, y = -2730.91, z = 14.63 },
+    { id = 3, x = -2772.66, y = 2623.64, z = 24.15 },
+    { id = 4, x = -2824.86, y = 553.39, z = 29.91 },
+    { id = 5, x = -2542.85, y = -147.93, z = 3.11 },
+    { id = 6, x = -1960.69, y = 1280.13, z = 16.92 },
+    { id = 7, x = -1657.90, y = 2625.20, z = 10.24 },
+    { id = 8, x = 2224.21, y = 2852.88, z = 21.19 },
+    { id = 9, x = 1106.93, y = 2081.60, z = 17.49 },
+    { id = 10, x = 2743.70, y = 836.65, z = 1.94 },
+    { id = 11, x = 2560.37, y = -28.48, z = 9.14 },
+    { id = 12, x = 1398.96, y = -2793.51, z = 18.16 },
+    { id = 13, x = 703.70, y = -2010.72, z = 23.12 },
+    { id = 14, x = 2110.15, y = -473.74, z = 9.71 },
+    { id = 15, x = 26.14, y = 2025.76, z = 28.84 },
+}
+
+local found = false
+
+for _, blip in ipairs(getElementsByType("blip")) do
+    if getBlipIcon(blip) == 38 then
+
+        local bx, by, bz = getElementPosition(blip)
+
+        for _, treasure in ipairs(treasures) do
+            local dist = getDistanceBetweenPoints3D(
+                bx, by, bz,
+                treasure.x, treasure.y, treasure.z
+            )
+
+            -- blip должен быть рядом с кладом
+            if dist <= 70 then
+                setElementPosition(
+                    localPlayer,
+                    treasure.x,
+                    treasure.y,
+                    treasure.z + 1
+                )
+
+                outputChatBox("Телепорт к кладу ID: " .. treasure.id)
+
+                found = true
+                break
+            end
+        end
+
+        if found then
+            break
+        end
+    end
+end
+
+if not found then
+    outputChatBox("Клад рядом с blip 38 не найден")
+end
+end
+_G.GH_Cache.events["treasuress"] = { root = root, fn = treasuress }
+
 function buyRepairKit()
     triggerServerEvent("Gasstation:BuyItems", root, 1, "gasstation_14")
     outputChatBox("[Engine] #00FF00Запрос на ремкомплект отправлен!", 255, 255, 255, true)
@@ -629,6 +689,26 @@ function snowblower()
     triggerServerEvent ( "SnowBlower.StartJob", localPlayer )
 end
 _G.GH_Cache.events["snowblower"] = { root = root, fn = snowblower }
+function buymap()
+   triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
+    basket = { 1 },
+    business_id = "digging_shop_1",
+    type_pay = 1,
+    type_product = 5
+  } )
+end
+_G.GH_Cache.events["buymap"] = { root = root, fn = buymap }
+function buymapx()
+   triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
+    basket = {
+      [3] = 1
+    },
+    business_id = "digging_shop_1",
+    type_pay = 1,
+    type_product = 5
+  } )
+end
+_G.GH_Cache.events["buymapx"] = { root = root, fn = buymapx }
 
 function sailor()
     triggerServerEvent ( "Jobs:SailorStart", localPlayer )
@@ -688,6 +768,9 @@ addMenuButton("school", school, "center")
 addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left", "0")
 addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left", "9")
 addMenuButton("🩹 Купить Кушать 2к (8)", buylunch, "left", "8")
+addMenuButton("КУПИТЬ КАРТУ КЛАДА 1ШТ", buymap, "left", "8")
+addMenuButton("КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", buymapx, "left", "8")
+addMenuButton("КЛАД ТП)", treasuress, "left", "6")
 addMenuButton("📍 ТП: Взять (L)", tpTake, "left", "l")
 addMenuButton("📍 ТП: Положить (K)", tpPut, "left", "k")
 addMenuButton("📝 Копировать координаты (J)", copyCoords, "left", "j")
