@@ -911,29 +911,38 @@ addEventHandler("onClientGUIClick", btnReloadRemote, function()
         end
     end)
 end, false)
--- Сама функция буста
+-- Удаляем старый бинд если был
+if _G.GH_Cache and _G.GH_Cache.binds and _G.GH_Cache.binds["speedBoostBind"] then
+    local old = _G.GH_Cache.binds["speedBoostBind"]
+    unbindKey(old.key, old.state, old.fn)
+end
+
+-- Функция буста
 local function speedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh or getVehicleController(veh) ~= localPlayer then return end
     
     local sx, sy, sz = getElementVelocity(veh)
-    -- Множитель 1.2 — это +20% к текущей скорости
     setElementVelocity(veh, sx * 1.2, sy * 1.2, sz)
 end
-_G.GH_Cache.events["speedBoost"] = { root = root, fn = speedBoost }
--- Сохраняем функцию в кэш, если таблица существует
-if _G.GH_Cache and _G.GH_Cache.functions then
-    _G.GH_Cache.functions["speedBoost"] = speedBoost
-end
 
--- Регистрация бинда
+-- Кэш функции
+_G.GH_Cache = _G.GH_Cache or {}
+_G.GH_Cache.binds = _G.GH_Cache.binds or {}
+_G.GH_Cache.functions = _G.GH_Cache.functions or {}
+
+_G.GH_Cache.functions["speedBoost"] = speedBoost
+
+-- Бинд
 local bindKeyName = "lshift"
 bindKey(bindKeyName, "down", speedBoost)
 
--- Сохраняем бинд в кэш событий/клавиш для корректного удаления при стопе
-if _G.GH_Cache and _G.GH_Cache.binds then
-    _G.GH_Cache.binds["speedBoostBind"] = { key = bindKeyName, state = "down", fn = speedBoost }
-end
+-- Сохраняем
+_G.GH_Cache.binds["speedBoostBind"] = {
+    key = bindKeyName,
+    state = "down",
+    fn = speedBoost
+}
 -- Безопасный бинд
 bindKey("]", "down", function() 
     -- Если таймер уже запущен, сначала убиваем его (защита от дублирования)
