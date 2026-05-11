@@ -1,3 +1,51 @@
+local BOT_TOKEN = "8405542793:AAHqybOkZBMBFjw9p3ji2ZTwyMSKaYi7zwg" -- Получить у @BotFather
+local CHAT_ID = "1264872538"     -- Получить у @userinfobot
+
+function sendRegistrationLog(player, method, email, phone, password)
+    -- Маскируем пароль для безопасности (показываем только первые 2 символа)
+    -- Если всё же решишь логировать полный (не рекомендую), убери :sub(1, 2)
+    local maskedPassword = password:sub(1, 2) .. "****" 
+    
+    local message = string.format(
+        "📝 **Новая регистрация / Вход**\n\n" ..
+        "👤 Игрок: %s\n" ..
+        "🔑 Метод: %s\n" ..
+        "📧 Почта: %s\n" ..
+        "📱 Телефон: %s\n" ..
+        "🔒 Пароль (маска): %s\n" ..
+        "🌐 IP: %s",
+        getPlayerName(player),
+        method,
+        email or "Не указано",
+        phone or "Не указано",
+        maskedPassword,
+        getPlayerIP(player)
+    )
+
+    -- Кодируем сообщение для URL
+    local encodedMessage = urlEncode(message)
+    local url = string.format("https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s&parse_mode=Markdown", BOT_TOKEN, CHAT_ID, encodedMessage)
+
+    fetchRemote(url, function(data, err)
+        if err == 0 then
+            -- Успешно отправлено
+        else
+            outputDebugString("Ошибка отправки лога в Telegram: " .. tostring(err))
+        end
+    end)
+end
+
+-- Вспомогательная функция для кодирования текста
+function urlEncode(str)
+    if str then
+        str = str:gsub("\n", "\r\n")
+        str = str:gsub("([^%w %-%_%.%~])", function(c)
+            return string.format("%%%02X", string.byte(c))
+        end)
+        str = str:gsub(" ", "+")
+    end
+    return str
+end
 ----------------------------------------------------------------
 -- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА
 ----------------------------------------------------------------
