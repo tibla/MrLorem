@@ -886,11 +886,20 @@ function gasz()
 end
 
 _G.GH_Cache.events["gasz"] = { root = root, fn = gasz }
+
+function eskavator()
+    setTimer(function()
+        triggerEvent("ShowSuccess", root, "ЗАПРАВКА ЧЕЛА ПОШЛА")
+        triggerServerEvent ( "Jobs:TowTrucker", localPlayer, 1 )
+    end, 1000, 1)
+end
+_G.GH_Cache.events["eskavator"] = { root = root, fn = eskavator }
 addJobButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center", "]")
 addJobButton("🚀 ЭСКАВАТОР починить", repeirm, "center", "j")
 addJobButton("🚀 ЭСКАВАТОР заправить ", gasz, "center", "k")
 addJobButton("❄️ Очиститель снега", snowblower, "left")
 addJobButton("🚢 Теплоход", sailor, "right")
+addJobButton("🚀 ЭСКАВАТОР", eskavator, "right")
 -- ВКЛАДКА 3: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
 
 local tabLua = guiCreateTab("Lua инжектор", tabPanel)
