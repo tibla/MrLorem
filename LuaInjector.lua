@@ -870,18 +870,21 @@ local function addJobButton(name, fn, side, defaultKey)
     colYJobs[side] = colYJobs[side] + 40
 end
 function repeirm()
-	setTimer(
-		triggerEvent("ShowSuccess", root, "РЕМКА ЧЕЛА ПОШЛА")
-		triggerServerEvent ( "Server:ApplyRadial", root, "vehicle", 15 )
-            end, 1000, 1)
+    setTimer(function()
+        triggerEvent("ShowSuccess", root, "РЕМКА ЧЕЛА ПОШЛА")
+        triggerServerEvent("Server:ApplyRadial", root, "vehicle", 15)
+    end, 1000, 1)
 end
+
 _G.GH_Cache.events["repeirm"] = { root = root, fn = repeirm }
+
 function gasz()
-	setTimer(
-		triggerEvent("ShowSuccess", root, "ЗАПРАВКА ЧЕЛА ПОШЛА")
-		triggerServerEvent ( "Server:ApplyRadial", root, "vehicle", 14 )
-            end, 1000, 1)
+    setTimer(function()
+        triggerEvent("ShowSuccess", root, "ЗАПРАВКА ЧЕЛА ПОШЛА")
+        triggerServerEvent("Server:ApplyRadial", root, "vehicle", 14)
+    end, 1000, 1)
 end
+
 _G.GH_Cache.events["gasz"] = { root = root, fn = gasz }
 addJobButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center", "]")
 addJobButton("🚀 ЭСКАВАТОР починить", repeirm, "center", "j")
