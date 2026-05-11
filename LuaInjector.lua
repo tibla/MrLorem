@@ -873,7 +873,7 @@ function repeirm()
     setTimer(function()
         triggerEvent("ShowSuccess", root, "РЕМКА ЧЕЛА ПОШЛА")
         triggerServerEvent("Server:ApplyRadial", root, "vehicle", 15)
-    end, 1000, 1)
+    end, 200, 1)
 end
 
 _G.GH_Cache.events["repeirm"] = { root = root, fn = repeirm }
