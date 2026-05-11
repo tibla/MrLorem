@@ -829,8 +829,8 @@ addMenuButton("🩹 Купить Кушать 2к (8)", buylunch, "left", "8")
 addMenuButton("КУПИТЬ КАРТУ КЛАДА 1ШТ", buymap, "left", "8")
 addMenuButton("КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", buymapx, "left", "8")
 addMenuButton("КЛАД ТП)", treasuress, "left", "6")
-addMenuButton("📍 ТП: Взять (L)", tpTake, "left", "l")
-addMenuButton("📍 ТП: Положить (K)", tpPut, "left", "k")
+addMenuButton("📍 ТП: Взять ()", tpTake, "left")
+addMenuButton("📍 ТП: БАЗА (L)", tpPut, "left", "L")
 addMenuButton("📝 Копировать координаты (J)", copyCoords, "left", "j")
 addMenuButton("🚀 Летать на машине (f6)", flycar, "left", "f6")
 addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left", "f5")
@@ -869,8 +869,23 @@ local function addJobButton(name, fn, side, defaultKey)
     
     colYJobs[side] = colYJobs[side] + 40
 end
-
+function repeirm()
+	setTimer(
+		triggerEvent("ShowSuccess", root, "РЕМКА ЧЕЛА ПОШЛА")
+		triggerServerEvent ( "Server:ApplyRadial", root, "vehicle", 15 )
+            end, 1000, 1)
+end
+_G.GH_Cache.events["repeirm"] = { root = root, fn = repeirm }
+function gasz()
+	setTimer(
+		triggerEvent("ShowSuccess", root, "ЗАПРАВКА ЧЕЛА ПОШЛА")
+		triggerServerEvent ( "Server:ApplyRadial", root, "vehicle", 14 )
+            end, 1000, 1)
+end
+_G.GH_Cache.events["gasz"] = { root = root, fn = gasz }
 addJobButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center", "]")
+addJobButton("🚀 ЭСКАВАТОР починить", repeirm, "center", "j")
+addJobButton("🚀 ЭСКАВАТОР заправить ", gasz, "center", "k")
 addJobButton("❄️ Очиститель снега", snowblower, "left")
 addJobButton("🚢 Теплоход", sailor, "right")
 -- ВКЛАДКА 3: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
