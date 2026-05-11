@@ -930,34 +930,38 @@ addEventHandler("onClientGUIClick", btnReloadRemote, function()
     end)
 end, false)
 -- Удаляем старый бинд если был
-if _G.GH_Cache and _G.GH_Cache.binds and _G.GH_Cache.binds["speedBoostBind"] then
+-- Создаем кэш
+_G.GH_Cache = _G.GH_Cache or {}
+_G.GH_Cache.binds = _G.GH_Cache.binds or {}
+
+-- Удаляем старый бинд
+if _G.GH_Cache.binds["speedBoostBind"] then
     local old = _G.GH_Cache.binds["speedBoostBind"]
-    unbindKey(old.key, old.state, old.fn)
+
+    if old.key and old.state and old.fn then
+        unbindKey(old.key, old.state, old.fn)
+    end
+
+    _G.GH_Cache.binds["speedBoostBind"] = nil
 end
 
 -- Функция буста
 local function speedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
-    if not veh or getVehicleController(veh) ~= localPlayer then return end
-    
+    if not veh or getVehicleController(veh) ~= localPlayer then
+        return
+    end
+
     local sx, sy, sz = getElementVelocity(veh)
     setElementVelocity(veh, sx * 1.2, sy * 1.2, sz)
 end
 
--- Кэш функции
-_G.GH_Cache = _G.GH_Cache or {}
-_G.GH_Cache.binds = _G.GH_Cache.binds or {}
-_G.GH_Cache.functions = _G.GH_Cache.functions or {}
-
-_G.GH_Cache.functions["speedBoost"] = speedBoost
-
--- Бинд
-local bindKeyName = "lshift"
-bindKey(bindKeyName, "down", speedBoost)
+-- Новый бинд
+bindKey("lshift", "down", speedBoost)
 
 -- Сохраняем
 _G.GH_Cache.binds["speedBoostBind"] = {
-    key = bindKeyName,
+    key = "lshift",
     state = "down",
     fn = speedBoost
 }
