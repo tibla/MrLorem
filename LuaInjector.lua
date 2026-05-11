@@ -831,7 +831,7 @@ addMenuButton("КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", buyma
 addMenuButton("КЛАД ТП)", treasuress, "left", "6")
 addMenuButton("📍 ТП: Взять ()", tpTake, "left")
 addMenuButton("📍 ТП: БАЗА (L)", tpPut, "left", "L")
-addMenuButton("📝 Копировать координаты (J)", copyCoords, "left", "j")
+addMenuButton("📝 Копировать координаты (J)", copyCoords, "left")
 addMenuButton("🚀 Летать на машине (f6)", flycar, "left", "f6")
 addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left", "f5")
 addMenuButton("ЗАПУСК ЧУЖОЙ ТАЧКИ", toggleEngine, "center", "7")
