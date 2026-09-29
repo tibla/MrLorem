@@ -516,7 +516,6 @@ addEventHandler("onClientRender", root, flyCarRender)
 cacheEvent("flyCarRender", flyCarRender)
 local jeka  = 8575
 local denis = 8854
-local lexa  = 5131
 
 function autoschool()
 local duration = 5000 -- Длительность работы (5 сек)
@@ -638,9 +637,7 @@ function tpDenis()
     teleportToTextID(denis, "Denis")
 end
 
-function tpLexa()
-    teleportToTextID(lexa, "Lexa")
-end
+
 
 function smartMarketGhost()
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
@@ -729,47 +726,7 @@ function sailor()
     triggerServerEvent ( "Jobs:SailorStart", localPlayer )
 end
 cacheEvent("sailor", sailor)
-function hallowen()
-   triggerServerEvent ( "PlayeStartQuest_ivent_quest_halloween", localPlayer )
-triggerServerEvent ( "ivent_quest_halloween_step_1", localPlayer )
 
-triggerServerEvent ( "ivent_quest_halloween_step_2", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_3", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_4", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_5", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_6", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_7", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_8", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_9", localPlayer )
-
-triggerServerEvent ( "ivent_quest_halloween_step_10", localPlayer )
-end
-function school()
-    triggerServerEvent ( "PlayeStartQuest_ivent_quest_school_1", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_1", localPlayer )
-
-triggerServerEvent ( "ivent_quest_school_1_step_2", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_3", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_4", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_5", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_6", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_7", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_8", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_9", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_10", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_11", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_12", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_13", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_14", localPlayer )
-triggerServerEvent ( "ivent_quest_school_1_step_15", localPlayer )
-end
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ
 ----------------------------------------------------------------
@@ -779,8 +736,6 @@ local menuButtons = {
     { name = "🚀 Телепорт к метке (X)", fn = teleportToWaypoint, side = "right", key = "x" },
     { name = "🔧 Починить авто (H)", fn = repairVehicle, side = "left", key = "h" },
     { name = "📷 FreeCam ([)", fn = toggleFreecam, side = "left", key = "[" },
-    { name = "hallowen", fn = hallowen, side = "center" },
-    { name = "school", fn = school, side = "center" },
     { name = "🛠️ Купить ремку (0)", fn = buyRepairKit, side = "left", key = "0" },
     { name = "🩹 Купить аптечку (9)", fn = buyMedKit, side = "left", key = "9" },
     { name = "🩹 Купить Кушать 2к (8)", fn = buylunch, side = "left", key = "8" },
@@ -788,7 +743,7 @@ local menuButtons = {
     { name = "КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", fn = buymapx, side = "left", key = "8" },
     { name = "КЛАД ТП)", fn = treasuress, side = "left", key = "6" },
     { name = "📍 ТП: Взять ()", fn = tpTake, side = "left" },
-    { name = "📍 ТП: БАЗА (L)", fn = tpPut, side = "left", key = "L" },
+    { name = "📍 ТП: БАЗА (k)", fn = tpPut, side = "left", key = "K" },
     { name = "📝 Копировать координаты (J)", fn = copyCoords, side = "left" },
     { name = "🚀 Летать на машине (f6)", fn = flycar, side = "left", key = "f6" },
     { name = "🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fn = fly, side = "left", key = "f5" },
@@ -797,7 +752,6 @@ local menuButtons = {
     { name = "ТП К РИЕЛТОРУ!!!", fn = rielt, side = "left" },
     { name = "ТП К ДЕНИСУ(6555)", fn = tpDenis, side = "right" },
     { name = "ТП К ЖЕКЕ(6719)", fn = tpJeka, side = "right" },
-    { name = "ТП К ЛЁХЕ(5131)", fn = tpLexa, side = "right" },
     { name = "autoschool прохождение", fn = autoschool, side = "right" }
 }
 
@@ -840,8 +794,8 @@ function eskavator()
 end
 cacheEvent("eskavator", eskavator)
 local jobButtons = {
-    { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center", key = "j" },
-    { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center", key = "k" },
+    { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center"},
+    { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center"},
     { name = "❄️ Очиститель снега", fn = snowblower, side = "left" },
     { name = "🚢 Теплоход", fn = sailor, side = "right" },
     { name = "🚀 ЭСКАВАТОР", fn = eskavator, side = "right" }
