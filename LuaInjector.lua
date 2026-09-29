@@ -1,10 +1,17 @@
 ----------------------------------------------------------------
 -- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА
 ----------------------------------------------------------------
-_G.GH_Cache = _G.GH_Cache or { events = {}, binds = {}, gui = {} }
+_G.GH_Cache = _G.GH_Cache or {}
+_G.GH_Cache.events = _G.GH_Cache.events or {}
+_G.GH_Cache.binds = _G.GH_Cache.binds or {}
+_G.GH_Cache.gui = _G.GH_Cache.gui or {}
 
 local bindsData = {}
 local waitingForBind = nil
+
+local function cacheEvent(name, fn)
+    _G.GH_Cache.events[name] = { root = root, fn = fn }
+end
 
 function fullCleanup()
     -- 1. Удаляем главное окно
@@ -46,12 +53,12 @@ local function keyBindInterceptor(button, press)
     if button == "escape" or button == "backspace" then
         data.key = nil
         guiSetText(waitingForBind, "?")
-        triggerEvent("ShowError", root, "Бинд удален")
+        outputChatBox("Бинд удален", 255, 0, 0)
     else
         data.key = button
         guiSetText(waitingForBind, string.upper(button))
         bindKey(button, "down", data.fn)
-        triggerEvent("ShowSuccess", root, "Забинджено на: " .. string.upper(button))
+        outputChatBox("Забинджено на: " .. string.upper(button), 0, 255, 0)
     end
     waitingForBind = nil
 end
@@ -76,26 +83,35 @@ local tabFun = guiCreateTab("Приколы", tabPanel)
 local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
 local colY = { left = 10, center = 10, right = 10 }
 
-local function addMenuButton(name, fn, side, defaultKey)
+local columnX = { left = 10, center = 250, right = 490 }
+
+local function addActionButton(parent, columns, name, fn, side, defaultKey)
     side = side or "left"
-    local posX = (side == "center" and 250) or (side == "right" and 490) or 10
-    local y = colY[side]
+    local posX = columnX[side] or columnX.left
+    local y = columns[side] or columns.left
     
-    local btn = guiCreateButton(posX, y, 185, 35, name, false, scrollFun)
-    local bindBtn = guiCreateButton(posX + 190, y, 40, 35, (defaultKey and string.upper(defaultKey) or "?"), false, scrollFun)
+    local btn = guiCreateButton(posX, y, 185, 35, name, false, parent)
+    local bindBtn = guiCreateButton(posX + 190, y, 40, 35, (defaultKey and string.upper(defaultKey) or "?"), false, parent)
     
     bindsData[bindBtn] = { fn = fn, key = defaultKey, name = name }
     if defaultKey then bindKey(defaultKey, "down", fn) end
 
     addEventHandler("onClientGUIClick", btn, function() if not waitingForBind then fn() end end, false)
     addEventHandler("onClientGUIClick", bindBtn, function()
-        if waitingForBind then guiSetText(waitingForBind, bindsData[waitingForBind].key and string.upper(bindsData[waitingForBind].key) or "?") end
+        if waitingForBind and bindsData[waitingForBind] then
+            local previousBind = bindsData[waitingForBind].key
+            guiSetText(waitingForBind, previousBind and string.upper(previousBind) or "?")
+        end
         waitingForBind = source
         guiSetText(source, "...")
-        triggerEvent("ShowWarning", root, "Нажми клавишу...")
+        outputChatBox("Нажми клавишу...", 255, 255, 0)
     end, false)
     
-    colY[side] = colY[side] + 40
+    columns[side] = y + 40
+end
+
+local function addMenuButton(name, fn, side, defaultKey)
+    addActionButton(scrollFun, colY, name, fn, side, defaultKey)
 end
 
 ----------------------------------------------------------------
@@ -257,7 +273,7 @@ if not found then
     outputChatBox("Клад рядом с blip 38 не найден")
 end
 end
-_G.GH_Cache.events["treasuress"] = { root = root, fn = treasuress }
+cacheEvent("treasuress", treasuress)
 
 function buyRepairKit()
     triggerServerEvent("Gasstation:BuyItems", root, 1, "gasstation_14")
@@ -350,8 +366,8 @@ function toggleFreecam()
         addEventHandler("onClientRender", root, updateFreecam)
         addEventHandler("onClientCursorMove", root, freecamMouseMove)
         
-        _G.GH_Cache.events["freecamUpdate"] = { root = root, fn = updateFreecam }
-        _G.GH_Cache.events["freecamMouse"] = { root = root, fn = freecamMouseMove }
+        cacheEvent("freecamUpdate", updateFreecam)
+        cacheEvent("freecamMouse", freecamMouseMove)
         
         outputChatBox("[Engine] #00FF00FreeCam ON", 255, 255, 255, true)
     else
@@ -433,7 +449,7 @@ local function flyRender()
     setElementRotation(localPlayer, 0, 0, rotZ)
 end
 addEventHandler("onClientRender", root, flyRender)
-_G.GH_Cache.events["flyRender"] = { root = root, fn = flyRender } -- СОХРАНЯЕМ В КЭШ
+cacheEvent("flyRender", flyRender)
 
 ----------------------------------------------------------------
 -- FLY ФУНКЦИИ (МАШИНА)
@@ -460,22 +476,14 @@ local function flyCarRender()
     local x, y, z = getElementPosition(veh)
     local camX, camY, camZ, lookX, lookY, lookZ = getCameraMatrix()
 
-    -- ВПЕРЕД
+    -- Направление камеры
     local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
     local len = math.sqrt(dx*dx + dy*dy + dz*dz)
     if len == 0 then return end
 
     dx, dy, dz = dx / len, dy / len, dz / len
 
--- Боковой вектор (как в твоём примере)
--- 1. Вектор ВПЕРЕД (куда смотрим)
-    local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
-    local len = math.sqrt(dx*dx + dy*dy + dz*dz)
-    if len == 0 then return end
-    dx, dy, dz = dx/len, dy/len, dz/len
-
-    -- 2. Вектор ВПРАВО (перпендикуляр к 'вперед')
-    -- Поворачиваем вектор (dx, dy) на 90 градусов
+    -- Боковой вектор
     local rx = dy 
     local ry = -dx
 
@@ -505,9 +513,7 @@ end
 
 addEventHandler("onClientRender", root, flyCarRender)
 
-if _G.GH_Cache and _G.GH_Cache.events then
-    _G.GH_Cache.events["flyCarRender"] = { root = root, fn = flyCarRender }
-end
+cacheEvent("flyCarRender", flyCarRender)
 local jeka  = 8575
 local denis = 8854
 local lexa  = 5131
@@ -554,7 +560,7 @@ setTimer(function()
     outputChatBox("Действие телепорта окончено.")
 end, duration, 1)
 end
-_G.GH_Cache.events["autoschool"] = { root = root, fn = autoschool }
+cacheEvent("autoschool", autoschool)
 ----------------------------------------------------------------
 -- Поиск игрока по текстовому ID (p + ID)
 ----------------------------------------------------------------
@@ -590,7 +596,7 @@ function teleportToTextID(id, name)
         -- Сначала вверх для прогрузки зоны
         setElementPosition(target, x, y, z + 50)
 
-        triggerEvent("ShowSuccess", root, "Загрузка зоны рядом с " .. name .. "...")
+        outputChatBox("Загрузка зоны рядом с " .. name .. "...", 0, 255, 0)
 
         -- Потом безопасно вниз
         setTimer(function()
@@ -612,12 +618,12 @@ function teleportToTextID(id, name)
 
                 setElementPosition(target, gx, gy, safeZ)
 
-                triggerEvent("ShowSuccess", root, "Телепорт к " .. name .. " завершен!")
+                outputChatBox("Телепорт к " .. name .. " завершен!", 0, 255, 0)
             end
         end, 200, 1)
 
     else
-        triggerEvent("ShowSuccess", root, name .. " не найден.")
+        outputChatBox(name .. " не найден.", 0, 255, 0)
     end
 end
 
@@ -635,55 +641,6 @@ end
 function tpLexa()
     teleportToTextID(lexa, "Lexa")
 end
-
-local autoMode = false
-local autoTimer = nil
-
-function autoLoop()
-    -- 1. Проверяем, включен ли режим и есть ли машина
-    if not autoMode then return end
-    
-    local veh = getPedOccupiedVehicle(localPlayer)
-    if not isElement(veh) then 
-        if isTimer(autoTimer) then killTimer(autoTimer) end
-        autoMode = false
-        return 
-    end
-
-    -- 2. Чиним и отключаем коллизию
-    if getElementHealth(veh) < 950 then
-        fixVehicle(veh)
-    end
-    
-    if getElementCollisionsEnabled(veh) then
-        setElementCollisionsEnabled(veh, false)
-    end
-
-    -- 3. Поиск блипа
-    local waypoint = false
-    local blips = getElementsByType("blip")
-    for i = 1, #blips do
-        if getBlipIcon(blips[i]) == 41 then 
-            waypoint = blips[i]
-            break 
-        end
-    end
-
-    -- 4. Логика телепорта
-    if waypoint then
-        local wx, wy, wz = getElementPosition(waypoint)
-        local px, py, pz = getElementPosition(veh)
-        local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
-        
-        if dist > 2 then
-            -- Обнуляем скорость, чтобы не "выстреливать" в небо
-            setElementVelocity(veh, 0, 0, 0)
-            setElementPosition(veh, wx, wy, wz + 1.0)
-        end
-    end -- Этот end закрывает "if waypoint"
-end -- Этот end закрывает "function autoLoop"
-
-
 
 function smartMarketGhost()
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
@@ -739,14 +696,14 @@ function toggleEngine()
         outputChatBox("Ты не в машине", 255, 0, 0)
     end
 end
-_G.GH_Cache.events["toggleEngine"] = { root = root, fn = toggleEngine }
+cacheEvent("toggleEngine", toggleEngine)
 
 -- Регистрация в кэше
-_G.GH_Cache.events["smartMarketGhost"] = { root = root, fn = smartMarketGhost }
+cacheEvent("smartMarketGhost", smartMarketGhost)
 function snowblower()
     triggerServerEvent ( "SnowBlower.StartJob", localPlayer )
 end
-_G.GH_Cache.events["snowblower"] = { root = root, fn = snowblower }
+cacheEvent("snowblower", snowblower)
 function buymap()
    triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
     basket = { 1 },
@@ -755,7 +712,7 @@ function buymap()
     type_product = 5
   } )
 end
-_G.GH_Cache.events["buymap"] = { root = root, fn = buymap }
+cacheEvent("buymap", buymap)
 function buymapx()
    triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
     basket = {
@@ -766,12 +723,12 @@ function buymapx()
     type_product = 5
   } )
 end
-_G.GH_Cache.events["buymapx"] = { root = root, fn = buymapx }
+cacheEvent("buymapx", buymapx)
 
 function sailor()
     triggerServerEvent ( "Jobs:SailorStart", localPlayer )
 end
-_G.GH_Cache.events["sailor"] = { root = root, fn = sailor }
+cacheEvent("sailor", sailor)
 function hallowen()
    triggerServerEvent ( "PlayeStartQuest_ivent_quest_halloween", localPlayer )
 triggerServerEvent ( "ivent_quest_halloween_step_1", localPlayer )
@@ -817,89 +774,82 @@ end
 -- НАПОЛНЕНИЕ
 ----------------------------------------------------------------
 
-addMenuButton("🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", smartMarketGhost, "center")
-addMenuButton("🚀 Телепорт к метке (X)", teleportToWaypoint, "right", "x")
-addMenuButton("🔧 Починить авто (H)", repairVehicle, "left", "h")
-addMenuButton("📷 FreeCam ([)", toggleFreecam, "left", "[")
-addMenuButton("hallowen", hallowen, "center")
-addMenuButton("school", school, "center")
-addMenuButton("🛠️ Купить ремку (0)", buyRepairKit, "left", "0")
-addMenuButton("🩹 Купить аптечку (9)", buyMedKit, "left", "9")
-addMenuButton("🩹 Купить Кушать 2к (8)", buylunch, "left", "8")
-addMenuButton("КУПИТЬ КАРТУ КЛАДА 1ШТ", buymap, "left", "8")
-addMenuButton("КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", buymapx, "left", "8")
-addMenuButton("КЛАД ТП)", treasuress, "left", "6")
-addMenuButton("📍 ТП: Взять ()", tpTake, "left")
-addMenuButton("📍 ТП: БАЗА (L)", tpPut, "left", "L")
-addMenuButton("📝 Копировать координаты (J)", copyCoords, "left")
-addMenuButton("🚀 Летать на машине (f6)", flycar, "left", "f6")
-addMenuButton("🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fly, "left", "f5")
-addMenuButton("ЗАПУСК ЧУЖОЙ ТАЧКИ", toggleEngine, "center", "7")
-addMenuButton("ТП НА БИРЖУ!!!", rynok, "left")
-addMenuButton("ТП К РИЕЛТОРУ!!!", rielt, "left")
-addMenuButton("ТП К ДЕНИСУ(6555)", tpDenis, "right")
-addMenuButton("ТП К ЖЕКЕ(6719)", tpJeka, "right")
-addMenuButton("ТП К ЛЁХЕ(5131)", tpLexa, "right")
-addMenuButton("autoschool прохождение", autoschool, "right")
+local menuButtons = {
+    { name = "🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", fn = smartMarketGhost, side = "center" },
+    { name = "🚀 Телепорт к метке (X)", fn = teleportToWaypoint, side = "right", key = "x" },
+    { name = "🔧 Починить авто (H)", fn = repairVehicle, side = "left", key = "h" },
+    { name = "📷 FreeCam ([)", fn = toggleFreecam, side = "left", key = "[" },
+    { name = "hallowen", fn = hallowen, side = "center" },
+    { name = "school", fn = school, side = "center" },
+    { name = "🛠️ Купить ремку (0)", fn = buyRepairKit, side = "left", key = "0" },
+    { name = "🩹 Купить аптечку (9)", fn = buyMedKit, side = "left", key = "9" },
+    { name = "🩹 Купить Кушать 2к (8)", fn = buylunch, side = "left", key = "8" },
+    { name = "КУПИТЬ КАРТУ КЛАДА 1ШТ", fn = buymap, side = "left", key = "8" },
+    { name = "КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", fn = buymapx, side = "left", key = "8" },
+    { name = "КЛАД ТП)", fn = treasuress, side = "left", key = "6" },
+    { name = "📍 ТП: Взять ()", fn = tpTake, side = "left" },
+    { name = "📍 ТП: БАЗА (L)", fn = tpPut, side = "left", key = "L" },
+    { name = "📝 Копировать координаты (J)", fn = copyCoords, side = "left" },
+    { name = "🚀 Летать на машине (f6)", fn = flycar, side = "left", key = "f6" },
+    { name = "🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fn = fly, side = "left", key = "f5" },
+    { name = "ЗАПУСК ЧУЖОЙ ТАЧКИ", fn = toggleEngine, side = "center", key = "7" },
+    { name = "ТП НА БИРЖУ!!!", fn = rynok, side = "left" },
+    { name = "ТП К РИЕЛТОРУ!!!", fn = rielt, side = "left" },
+    { name = "ТП К ДЕНИСУ(6555)", fn = tpDenis, side = "right" },
+    { name = "ТП К ЖЕКЕ(6719)", fn = tpJeka, side = "right" },
+    { name = "ТП К ЛЁХЕ(5131)", fn = tpLexa, side = "right" },
+    { name = "autoschool прохождение", fn = autoschool, side = "right" }
+}
+
+for _, item in ipairs(menuButtons) do
+    addMenuButton(item.name, item.fn, item.side, item.key)
+end
 
 --2
 -- ВКЛАДКА: РАБОТЫ
 local tabJobs = guiCreateTab("Работы", tabPanel)
 local scrollJobs = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabJobs)
-local colYJobs = { left = 10, center = 10, right = 10 } -- Таблица высот для колонок
+local colYJobs = { left = 10, center = 10, right = 10 }
 
 local function addJobButton(name, fn, side, defaultKey)
-    side = side or "left"
-    local posX = (side == "center" and 250) or (side == "right" and 490) or 10
-    local y = colYJobs[side]
-    
-    local btn = guiCreateButton(posX, y, 185, 35, name, false, scrollJobs)
-    local bindBtn = guiCreateButton(posX + 190, y, 40, 35, (defaultKey and string.upper(defaultKey) or "?"), false, scrollJobs)
-    
-    bindsData[bindBtn] = { fn = fn, key = defaultKey, name = name }
-    if defaultKey then bindKey(defaultKey, "down", fn) end
-
-    addEventHandler("onClientGUIClick", btn, function() if not waitingForBind then fn() end end, false)
-    addEventHandler("onClientGUIClick", bindBtn, function()
-        if waitingForBind then guiSetText(waitingForBind, bindsData[waitingForBind].key and string.upper(bindsData[waitingForBind].key) or "?") end
-        waitingForBind = source
-        guiSetText(source, "...")
-        triggerEvent("ShowWarning", root, "Нажми клавишу...")
-    end, false)
-    
-    colYJobs[side] = colYJobs[side] + 40
+    addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
 end
 function repeirm()
     setTimer(function()
-        triggerEvent("ShowSuccess", root, "РЕМКА ЧЕЛА ПОШЛА")
+        outputChatBox("РЕМКА ЧЕЛА ПОШЛА", 0, 255, 0)
         triggerServerEvent("Server:ApplyRadial", root, "vehicle", 15)
     end, 100, 1)
 end
 
-_G.GH_Cache.events["repeirm"] = { root = root, fn = repeirm }
+cacheEvent("repeirm", repeirm)
 
 function gasz()
     setTimer(function()
-        triggerEvent("ShowSuccess", root, "ЗАПРАВКА ЧЕЛА ПОШЛА")
+        outputChatBox("ЗАПРАВКА ЧЕЛА ПОШЛА", 0, 255, 0)
         triggerServerEvent("Server:ApplyRadial", root, "vehicle", 14)
     end, 100, 1)
 end
 
-_G.GH_Cache.events["gasz"] = { root = root, fn = gasz }
+cacheEvent("gasz", gasz)
 
 function eskavator()
     setTimer(function()
-        triggerEvent("ShowSuccess", root, "ЗАПРАВКА ЧЕЛА ПОШЛА")
+        outputChatBox("ЗАПРАВКА ЧЕЛА ПОШЛА", 0, 255, 0)
         triggerServerEvent ( "Jobs:TowTrucker", localPlayer, 1 )
     end, 200, 1)
 end
-_G.GH_Cache.events["eskavator"] = { root = root, fn = eskavator }
-addJobButton("🚀 ФАРМ АВТОБУС(])", autoLoop, "center", "]")
-addJobButton("🚀 ЭСКАВАТОР починить", repeirm, "center", "j")
-addJobButton("🚀 ЭСКАВАТОР заправить ", gasz, "center", "k")
-addJobButton("❄️ Очиститель снега", snowblower, "left")
-addJobButton("🚢 Теплоход", sailor, "right")
-addJobButton("🚀 ЭСКАВАТОР", eskavator, "right")
+cacheEvent("eskavator", eskavator)
+local jobButtons = {
+    { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center", key = "j" },
+    { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center", key = "k" },
+    { name = "❄️ Очиститель снега", fn = snowblower, side = "left" },
+    { name = "🚢 Теплоход", fn = sailor, side = "right" },
+    { name = "🚀 ЭСКАВАТОР", fn = eskavator, side = "right" }
+}
+
+for _, item in ipairs(jobButtons) do
+    addJobButton(item.name, item.fn, item.side, item.key)
+end
 -- ВКЛАДКА 3: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
 
 local tabLua = guiCreateTab("Lua инжектор", tabPanel)
@@ -918,7 +868,7 @@ end, false)
 -- Очистка (CLEAR ALL)
 addEventHandler("onClientGUIClick", btnClearLua, function() 
     guiSetText(luaMemo, "") 
-    triggerEvent("ShowWarning", root, "Поле очищено")
+    outputChatBox("Поле очищено", 255, 255, 0)
 end, false)
 
 -- Обновление (GITHUB)
@@ -929,7 +879,7 @@ addEventHandler("onClientGUIClick", btnReloadRemote, function()
             local func, cErr = loadstring(data)
             if func then 
                 pcall(func) 
-                triggerEvent("ShowSuccess", root, "Обновлено из GitHub!")
+                outputChatBox("Обновлено из GitHub!", 0, 255, 0)
             else
                 outputChatBox("Ошибка компиляции: "..tostring(cErr))
             end
@@ -974,25 +924,6 @@ _G.GH_Cache.binds["speedBoostBind"] = {
     state = "down",
     fn = speedBoost
 }
--- Безопасный бинд
-bindKey("]", "down", function() 
-    -- Если таймер уже запущен, сначала убиваем его (защита от дублирования)
-    if isTimer(autoTimer) then killTimer(autoTimer) end
-    
-    autoMode = not autoMode 
-    
-    if autoMode then
-        autoTimer = setTimer(autoLoop, 100, 0)
-        -- Сохраняем в глобальный кэш для очистки при перезагрузке
-        if _G.GH_Cache and _G.GH_Cache.timers then _G.GH_Cache.timers["busFarm"] = autoTimer end
-        triggerEvent("ShowSuccess", root, "Auto-Farm: ON")
-    else
-        local v = getPedOccupiedVehicle(localPlayer)
-        if isElement(v) then setElementCollisionsEnabled(v, true) end
-        triggerEvent("ShowError", root, "Auto-Farm: OFF")
-    end
-end)
-
 -- Открытие на F9
 bindKey("f9", "down", function()
     local v = not guiGetVisible(mainWin)
