@@ -73,12 +73,21 @@ local windowW, windowH = 750, 720
 local x, y = (screenW - windowW) / 2, (screenH - windowH) / 2
 
 mainWin = guiCreateWindow(x, y, windowW, windowH, "MR.Lorem | Control Panel", false)
+
 guiWindowSetSizable(mainWin, false)
 guiSetVisible(mainWin, false)
-
+local tabPanel = guiCreateTabPanel(
+    10,
+    25,
+    windowW - 20,
+    windowH - 40,
+    false,
+    mainWin
+)
 
 -- ВКЛАДКА 1: ПРИКОЛЫ
 local tabFun = guiCreateTab("Приколы", tabPanel)
+local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, mainWin)
 local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
 local colY = { left = 10, center = 10, right = 10 }
 
@@ -112,6 +121,7 @@ end
 local function addMenuButton(name, fn, side, defaultKey)
     addActionButton(scrollFun, colY, name, fn, side, defaultKey)
 end
+
 ----------------------------------------------------------------
 -- НАСТРОЙКИ FLY
 ----------------------------------------------------------------
@@ -151,7 +161,7 @@ local function setFlyHidden(element, state)
     end
 end
 
-local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, mainWin)
+
 ----------------------------------------------------------------
 -- ФУНКЦИИ
 ----------------------------------------------------------------
