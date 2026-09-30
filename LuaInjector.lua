@@ -108,6 +108,22 @@ local scrollFun = guiCreateScrollPane(
     false,
     tabFun
 )
+
+bindKey("f9", "down", function()
+    local visible = not guiGetVisible(mainWin)
+
+    guiSetVisible(mainWin, visible)
+    showCursor(visible)
+
+    waitingForBind = nil
+end)
+
+outputChatBox(
+    "[Engine] F9 готов!",
+    0,
+    255,
+    0
+)
 ----------------------------------------------------------------
 -- НАСТРОЙКИ FLY
 ----------------------------------------------------------------
@@ -1399,25 +1415,18 @@ _G.GH_Cache.binds["speedBoostBind"] = {
     state = "down",
     fn = speedBoost
 }
--- Открытие на F9
-bindKey("f9", "down", function()
-    local v = not guiGetVisible(mainWin)
-    guiSetVisible(mainWin, v)
-    showCursor(v)
-    waitingForBind = nil
-end)
 
 ---LUA f2
-
 local screenW, screenH = guiGetScreenSize()
 
-local windowW = 720
-local windowH = 520
+local windowW = 650
+local windowH = 480
 
 local windowX = (screenW - windowW) / 2
 local windowY = (screenH - windowH) / 2
 
-local defaultText = "-- Вставь сюда Lua-код и нажми «Выполнить»"
+local DEFAULT_TEXT =
+    "-- Вставь сюда Lua-код и нажми «Выполнить»"
 
 
 local injectorWindow = guiCreateWindow(
@@ -1437,8 +1446,8 @@ local luaMemo = guiCreateMemo(
     10,
     30,
     windowW - 20,
-    windowH - 145,
-    defaultText,
+    windowH - 150,
+    DEFAULT_TEXT,
     false,
     injectorWindow
 )
@@ -1447,7 +1456,7 @@ local luaMemo = guiCreateMemo(
 local btnExecute = guiCreateButton(
     10,
     windowH - 105,
-    220,
+    195,
     40,
     "Выполнить",
     false,
@@ -1455,9 +1464,9 @@ local btnExecute = guiCreateButton(
 )
 
 local btnClear = guiCreateButton(
-    245,
-    windowH - 105,
     220,
+    windowH - 105,
+    195,
     40,
     "Очистить",
     false,
@@ -1465,9 +1474,9 @@ local btnClear = guiCreateButton(
 )
 
 local btnClose = guiCreateButton(
-    480,
+    430,
     windowH - 105,
-    220,
+    210,
     40,
     "Закрыть",
     false,
@@ -1477,7 +1486,7 @@ local btnClose = guiCreateButton(
 
 local lblStatus = guiCreateLabel(
     10,
-    windowH - 57,
+    windowH - 58,
     windowW - 20,
     20,
     "Статус: Ожидание ввода...",
@@ -1485,8 +1494,16 @@ local lblStatus = guiCreateLabel(
     injectorWindow
 )
 
-guiLabelSetHorizontalAlign(lblStatus, "left", true)
-guiSetFont(lblStatus, "default-bold")
+guiLabelSetHorizontalAlign(
+    lblStatus,
+    "left",
+    true
+)
+
+guiSetFont(
+    lblStatus,
+    "default-bold"
+)
 
 
 local lblHelp = guiCreateLabel(
@@ -1494,42 +1511,63 @@ local lblHelp = guiCreateLabel(
     windowH - 32,
     windowW - 20,
     20,
-    "F2 — открыть/закрыть | Ctrl+Enter — выполнить код",
+    "F2 — открыть/закрыть | Ctrl+Enter — выполнить",
     false,
     injectorWindow
 )
 
-guiLabelSetHorizontalAlign(lblHelp, "left", true)
+guiLabelSetHorizontalAlign(
+    lblHelp,
+    "left",
+    true
+)
 
 
 local function setStatus(text, r, g, b)
-    guiSetText(lblStatus, "Статус: " .. text)
-    guiLabelSetColor(lblStatus, r, g, b)
+    guiSetText(
+        lblStatus,
+        "Статус: " .. text
+    )
+
+    guiLabelSetColor(
+        lblStatus,
+        r,
+        g,
+        b
+    )
 end
 
 
-local function toggleWindow()
+local function toggleConsole()
     local visible = not guiGetVisible(injectorWindow)
 
-    guiSetVisible(injectorWindow, visible)
+    guiSetVisible(
+        injectorWindow,
+        visible
+    )
+
     showCursor(visible)
 
     if visible then
-        guiSetInputMode("no_binds_when_editing")
         guiBringToFront(injectorWindow)
+        guiSetInputMode("no_binds_when_editing")
     else
         guiSetInputMode("allow_binds")
     end
 end
 
-bindKey("f2", "down", toggleWindow)
+bindKey(
+    "f2",
+    "down",
+    toggleConsole
+)
 
 
 local function executeCode()
     local codeText = guiGetText(luaMemo)
     local cleanText = codeText:gsub("%s", "")
 
-    if cleanText == "" or codeText == defaultText then
+    if cleanText == "" or codeText == DEFAULT_TEXT then
         setStatus(
             "Ошибка: поле ввода пустое.",
             255,
@@ -1544,27 +1582,39 @@ local function executeCode()
     local compileError
 
     if loadstring then
-        compiledFunction, compileError = loadstring(
-            codeText,
-            "@MR.Lorem_LocalConsole"
-        )
+        compiledFunction, compileError =
+            loadstring(
+                codeText,
+                "@LocalLuaConsole"
+            )
+    elseif load then
+        compiledFunction, compileError =
+            load(
+                codeText,
+                "@LocalLuaConsole"
+            )
     else
-        compiledFunction, compileError = load(
-            codeText,
-            "@MR.Lorem_LocalConsole"
+        setStatus(
+            "loadstring недоступен.",
+            255,
+            80,
+            80
         )
+
+        return
     end
 
     if not compiledFunction then
         setStatus(
-            "Ошибка компиляции: " .. tostring(compileError),
+            "Ошибка синтаксиса: "
+                .. tostring(compileError),
             255,
             80,
             80
         )
 
         outputChatBox(
-            "[Console] Ошибка компиляции: "
+            "[Console] Ошибка синтаксиса: "
                 .. tostring(compileError),
             255,
             0,
@@ -1575,13 +1625,17 @@ local function executeCode()
     end
 
     local startTime = getTickCount()
-    local success, runtimeError = pcall(compiledFunction)
-    local elapsedTime = getTickCount() - startTime
+
+    local success, runtimeError =
+        pcall(compiledFunction)
+
+    local executionTime =
+        getTickCount() - startTime
 
     if success then
         setStatus(
-            "Код выполнен успешно за "
-                .. elapsedTime
+            "Успешно выполнено за "
+                .. executionTime
                 .. " мс.",
             80,
             255,
@@ -1589,7 +1643,7 @@ local function executeCode()
         )
 
         outputChatBox(
-            "[Console] Код успешно выполнен.",
+            "[Console] Код выполнен успешно.",
             0,
             255,
             0
@@ -1615,7 +1669,10 @@ end
 
 
 local function clearCode()
-    guiSetText(luaMemo, "")
+    guiSetText(
+        luaMemo,
+        ""
+    )
 
     setStatus(
         "Поле очищено.",
@@ -1626,8 +1683,12 @@ local function clearCode()
 end
 
 
-local function closeWindow()
-    guiSetVisible(injectorWindow, false)
+local function closeConsole()
+    guiSetVisible(
+        injectorWindow,
+        false
+    )
+
     showCursor(false)
     guiSetInputMode("allow_binds")
 end
@@ -1657,7 +1718,7 @@ addEventHandler(
     "onClientGUIClick",
     btnClose,
     function()
-        closeWindow()
+        closeConsole()
     end,
     false
 )
@@ -1691,7 +1752,11 @@ addEventHandler(
     "onClientResourceStop",
     resourceRoot,
     function()
-        guiSetVisible(injectorWindow, false)
+        guiSetVisible(
+            injectorWindow,
+            false
+        )
+
         showCursor(false)
         guiSetInputMode("allow_binds")
     end
