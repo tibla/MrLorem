@@ -72,10 +72,19 @@ local screenW, screenH = guiGetScreenSize()
 local windowW, windowH = 750, 720
 local x, y = (screenW - windowW) / 2, (screenH - windowH) / 2
 
-mainWin = guiCreateWindow(x, y, windowW, windowH, "MR.Lorem | Control Panel", false)
+mainWin = guiCreateWindow(
+    x,
+    y,
+    windowW,
+    windowH,
+    "MR.Lorem | Control Panel",
+    false
+)
 
 guiWindowSetSizable(mainWin, false)
 guiSetVisible(mainWin, false)
+
+-- Создаём только одну панель вкладок
 local tabPanel = guiCreateTabPanel(
     10,
     25,
@@ -85,43 +94,20 @@ local tabPanel = guiCreateTabPanel(
     mainWin
 )
 
--- ВКЛАДКА 1: ПРИКОЛЫ
-local tabFun = guiCreateTab("Приколы", tabPanel)
-local tabPanel = guiCreateTabPanel(10, 25, windowW - 20, windowH - 40, false, mainWin)
-local scrollFun = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun)
-local colY = { left = 10, center = 10, right = 10 }
+-- Вкладка «Приколы»
+local tabFun = guiCreateTab(
+    "Приколы",
+    tabPanel
+)
 
-local columnX = { left = 10, center = 250, right = 490 }
-
-local function addActionButton(parent, columns, name, fn, side, defaultKey)
-    side = side or "left"
-    local posX = columnX[side] or columnX.left
-    local y = columns[side] or columns.left
-    
-    local btn = guiCreateButton(posX, y, 185, 35, name, false, parent)
-    local bindBtn = guiCreateButton(posX + 190, y, 40, 35, (defaultKey and string.upper(defaultKey) or "?"), false, parent)
-    
-    bindsData[bindBtn] = { fn = fn, key = defaultKey, name = name }
-    if defaultKey then bindKey(defaultKey, "down", fn) end
-
-    addEventHandler("onClientGUIClick", btn, function() if not waitingForBind then fn() end end, false)
-    addEventHandler("onClientGUIClick", bindBtn, function()
-        if waitingForBind and bindsData[waitingForBind] then
-            local previousBind = bindsData[waitingForBind].key
-            guiSetText(waitingForBind, previousBind and string.upper(previousBind) or "?")
-        end
-        waitingForBind = source
-        guiSetText(source, "...")
-        outputChatBox("Нажми клавишу...", 255, 255, 0)
-    end, false)
-    
-    columns[side] = y + 40
-end
-
-local function addMenuButton(name, fn, side, defaultKey)
-    addActionButton(scrollFun, colY, name, fn, side, defaultKey)
-end
-
+local scrollFun = guiCreateScrollPane(
+    5,
+    5,
+    windowW - 30,
+    windowH - 80,
+    false,
+    tabFun
+)
 ----------------------------------------------------------------
 -- НАСТРОЙКИ FLY
 ----------------------------------------------------------------
