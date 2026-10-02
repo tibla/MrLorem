@@ -1,4 +1,3 @@
-
 ----------------------------------------------------------------
 -- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА
 ----------------------------------------------------------------
@@ -6,9 +5,12 @@ _G.GH_Cache = _G.GH_Cache or {}
 _G.GH_Cache.events = _G.GH_Cache.events or {}
 _G.GH_Cache.binds = _G.GH_Cache.binds or {}
 _G.GH_Cache.gui = _G.GH_Cache.gui or {}
+_G.GH_Cache.timers = _G.GH_Cache.timers or {}
 
 local bindsData = {}
 local waitingForBind = nil
+local autoMode = false
+local autoTimer = nil
 
 local function cacheEvent(name, fn)
     _G.GH_Cache.events[name] = { root = root, fn = fn }
@@ -23,8 +25,17 @@ function fullCleanup()
         if data.key then unbindKey(data.key, "down", data.fn) end
     end
     unbindKey("f9", "down")
+    unbindKey("]", "down")
+    unbindKey("f2", "down")
+    unbindKey("lshift", "down")
     
-    -- 3. Удаляем рендеры и события
+    -- 3. Очищаем активные таймеры
+    if isTimer(autoTimer) then killTimer(autoTimer) end
+    for _, timer in pairs(_G.GH_Cache.timers) do
+        if isTimer(timer) then killTimer(timer) end
+    end
+    
+    -- 4. Удаляем рендеры и события
     for eventName, data in pairs(_G.GH_Cache.events) do
         removeEventHandler(eventName, data.root, data.fn)
     end
@@ -32,8 +43,9 @@ function fullCleanup()
         removeEventHandler("onClientKey", root, _G.GH_Cache.keyHandler)
     end
     
-    -- 4. Очистка кэша
+    -- 5. Очистка кэша
     _G.GH_Cache.events = {}
+    _G.GH_Cache.timers = {}
     bindsData = {}
     waitingForBind = nil
     
@@ -386,21 +398,21 @@ local treasures = {
     { id = 13, x = 703.70, y = -2010.72, z = 23.12 },
     { id = 14, x = 2110.15, y = -473.74, z = 9.71 },
     { id = 15, x = 26.14, y = 2025.76, z = 28.84 },
-    	{ id = 16, x = -2490.71, y = 4530.74, z = 3.14 },
-		{ id = 17, x = -2198.66, y = 4529.76, z = 3.29 },
-		{ id = 18, x = -2267.13, y = 4536.75, z = 3.25 },
-		{ id = 19, x = -2613.60, y = 3752.97, z = 2.78 },
-		{ id = 20, x = -2699.43, y = 4091.84, z = 3.00 },
-		{ id = 21, x = -2646.73, y = 3698.95, z = 3.00 },
-		{ id = 22, x = -2760.94, y = 3902.06, z = 3.01 },
-		{ id = 23, x = -2776.93, y = 3899.85, z = 3.00 },
-		{ id = 24, x = -2700.62, y = 3967.84, z = 3.37 },
-		{ id = 25, x = -2700.20, y = 3978.26, z = 3.35 },
-		{ id = 26, x = -2594.87, y = 3687.80, z = 3.00 },
-		{ id = 27, x = -2028.65, y = 3482.02, z = 10.32 },
-		{ id = 28, x = -2232.45, y = 4474.95, z = 3.25 },
-		{ id = 29, x = -2287.96, y = 4489.63, z = 3.35 },
-		{ id = 30, x = -2432.91, y = 3619.46, z = 3.00 },
+    { id = 16, x = -2490.71, y = 4530.74, z = 3.14 },
+    { id = 17, x = -2198.66, y = 4529.76, z = 3.29 },
+    { id = 18, x = -2267.13, y = 4536.75, z = 3.25 },
+    { id = 19, x = -2613.60, y = 3752.97, z = 2.78 },
+    { id = 20, x = -2699.43, y = 4091.84, z = 3.00 },
+    { id = 21, x = -2646.73, y = 3698.95, z = 3.00 },
+    { id = 22, x = -2760.94, y = 3902.06, z = 3.01 },
+    { id = 23, x = -2776.93, y = 3899.85, z = 3.00 },
+    { id = 24, x = -2700.62, y = 3967.84, z = 3.37 },
+    { id = 25, x = -2700.20, y = 3978.26, z = 3.35 },
+    { id = 26, x = -2594.87, y = 3687.80, z = 3.00 },
+    { id = 27, x = -2028.65, y = 3482.02, z = 10.32 },
+    { id = 28, x = -2232.45, y = 4474.95, z = 3.25 },
+    { id = 29, x = -2287.96, y = 4489.63, z = 3.35 },
+    { id = 30, x = -2432.91, y = 3619.46, z = 3.00 },
 }
 
 local found = false
@@ -416,7 +428,6 @@ for _, blip in ipairs(getElementsByType("blip")) do
                 treasure.x, treasure.y, treasure.z
             )
 
-            -- blip должен быть рядом с кладом
             if dist <= 40 then
                 setElementPosition(
                     localPlayer,
@@ -523,14 +534,13 @@ function toggleFreecam()
     freecamEnabled = not freecamEnabled
     
     if freecamEnabled then
-        -- ВКЛЮЧЕНИЕ
-        camX, camY, camZ = getCameraMatrix() -- Начинаем полет от текущей камеры
+        camX, camY, camZ = getCameraMatrix()
         
         setElementFrozen(localPlayer, true)
         setElementAlpha(localPlayer, 0)
         showCursor(false)
         setCursorAlpha(0)
-        toggleAllControls(false, true, false) -- Блокируем ходьбу, но оставляем чат
+        toggleAllControls(false, true, false)
 
         addEventHandler("onClientRender", root, updateFreecam)
         addEventHandler("onClientCursorMove", root, freecamMouseMove)
@@ -540,7 +550,6 @@ function toggleFreecam()
         
         outputChatBox("[Engine] #00FF00FreeCam ON", 255, 255, 255, true)
     else
-        -- ВЫКЛЮЧЕНИЕ
         removeEventHandler("onClientRender", root, updateFreecam)
         removeEventHandler("onClientCursorMove", root, freecamMouseMove)
         
@@ -550,9 +559,7 @@ function toggleFreecam()
         setElementFrozen(localPlayer, false)
         setElementAlpha(localPlayer, 255)
         setCursorAlpha(255)
-        toggleAllControls(true) -- Разблокируем управление
-        
-        -- САМОЕ ВАЖНОЕ: Возвращаем камеру за спину игрока
+        toggleAllControls(true)
         setCameraTarget(localPlayer) 
         
         outputChatBox("[Engine] #FF0000FreeCam OFF", 255, 255, 255, true)
@@ -564,24 +571,13 @@ end
 ----------------------------------------------------------------
 
 local noclip = false
-local lastPos = {
-    x = 0,
-    y = 0,
-    z = 0
-}
-
+local lastPos = { x = 0, y = 0, z = 0 }
 
 function fly()
     local vehicle = getPedOccupiedVehicle(localPlayer)
 
     if vehicle then
-        outputChatBox(
-            "❌ Нельзя включить fly в машине!",
-            255,
-            0,
-            0
-        )
-
+        outputChatBox("❌ Нельзя включить fly в машине!", 255, 0, 0)
         return
     end
 
@@ -590,154 +586,55 @@ function fly()
     if noclip then
         setElementFrozen(localPlayer, true)
         setElementCollisionsEnabled(localPlayer, false)
-
-        setFlyHidden(
-            localPlayer,
-            flyConfig.hidePlayer
-        )
-
-        outputChatBox(
-            "[Fly] #00FF00Включён!",
-            255,
-            255,
-            255,
-            true
-        )
+        setFlyHidden(localPlayer, flyConfig.hidePlayer)
+        outputChatBox("[Fly] #00FF00Включён!", 255, 255, 255, true)
     else
         setElementFrozen(localPlayer, false)
         setElementCollisionsEnabled(localPlayer, true)
         setFlyHidden(localPlayer, false)
 
         if flyConfig.restorePosition then
-            setElementPosition(
-                localPlayer,
-                lastPos.x,
-                lastPos.y,
-                lastPos.z
-            )
+            setElementPosition(localPlayer, lastPos.x, lastPos.y, lastPos.z)
         end
 
-        outputChatBox(
-            "[Fly] #FF0000Выключен!",
-            255,
-            255,
-            255,
-            true
-        )
+        outputChatBox("[Fly] #FF0000Выключен!", 255, 255, 255, true)
     end
 end
-
 
 local function flyRender()
-    if not noclip then
-        return
-    end
-
-    if not isElement(localPlayer) then
-        return
-    end
+    if not noclip or not isElement(localPlayer) then return end
 
     local x, y, z = getElementPosition(localPlayer)
+    lastPos.x, lastPos.y, lastPos.z = x, y, z
 
-    lastPos.x = x
-    lastPos.y = y
-    lastPos.z = z
+    setFlyHidden(localPlayer, flyConfig.hidePlayer)
 
-    setFlyHidden(
-        localPlayer,
-        flyConfig.hidePlayer
-    )
+    local camX, camY, camZ, lookX, lookY, lookZ = getCameraMatrix()
+    local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
+    local length = math.sqrt(dx * dx + dy * dy + dz * dz)
 
-    local camX, camY, camZ, lookX, lookY, lookZ =
-        getCameraMatrix()
-
-    local dx = lookX - camX
-    local dy = lookY - camY
-    local dz = lookZ - camZ
-
-    local length = math.sqrt(
-        dx * dx +
-        dy * dy +
-        dz * dz
-    )
-
-    if length <= 0 then
-        return
-    end
-
-    dx = dx / length
-    dy = dy / length
-    dz = dz / length
+    if length <= 0 then return end
+    dx, dy, dz = dx / length, dy / length, dz / length
 
     local currentSpeed = flyConfig.playerSpeed
+    if getKeyState("lshift") then currentSpeed = currentSpeed * flyConfig.playerBoost end
 
-    if getKeyState("lshift") then
-        currentSpeed =
-            currentSpeed * flyConfig.playerBoost
-    end
+    if getKeyState("w") then x, y, z = x + dx * currentSpeed, y + dy * currentSpeed, z + dz * currentSpeed end
+    if getKeyState("s") then x, y, z = x - dx * currentSpeed, y - dy * currentSpeed, z - dz * currentSpeed end
 
-    if getKeyState("w") then
-        x = x + dx * currentSpeed
-        y = y + dy * currentSpeed
-        z = z + dz * currentSpeed
-    end
+    local rightX, rightY = dy, -dx
+    if getKeyState("a") then x, y = x - rightX * currentSpeed, y - rightY * currentSpeed end
+    if getKeyState("d") then x, y = x + rightX * currentSpeed, y + rightY * currentSpeed end
+    if getKeyState("space") then z = z + currentSpeed end
+    if getKeyState("lctrl") then z = z - currentSpeed end
 
-    if getKeyState("s") then
-        x = x - dx * currentSpeed
-        y = y - dy * currentSpeed
-        z = z - dz * currentSpeed
-    end
-
-    local rightX = dy
-    local rightY = -dx
-
-    if getKeyState("a") then
-        x = x - rightX * currentSpeed
-        y = y - rightY * currentSpeed
-    end
-
-    if getKeyState("d") then
-        x = x + rightX * currentSpeed
-        y = y + rightY * currentSpeed
-    end
-
-    if getKeyState("space") then
-        z = z + currentSpeed
-    end
-
-    if getKeyState("lctrl") then
-        z = z - currentSpeed
-    end
-
-    setElementPosition(
-        localPlayer,
-        x,
-        y,
-        z
-    )
-
-    local rotationZ =
-        math.deg(math.atan2(dy, dx)) - 90
-
-    setElementRotation(
-        localPlayer,
-        0,
-        0,
-        rotationZ
-    )
+    setElementPosition(localPlayer, x, y, z)
+    setElementRotation(localPlayer, 0, 0, math.deg(math.atan2(dy, dx)) - 90)
 end
 
+addEventHandler("onClientRender", root, flyRender)
+cacheEvent("flyRender", flyRender)
 
-addEventHandler(
-    "onClientRender",
-    root,
-    flyRender
-)
-
-cacheEvent(
-    "flyRender",
-    flyRender
-)
 ----------------------------------------------------------------
 -- FLY НА МАШИНЕ
 ----------------------------------------------------------------
@@ -745,39 +642,21 @@ cacheEvent(
 local flycarEnabled = false
 local flycarVehicle = nil
 
-
 local function stopFlyCar()
-    if not flycarEnabled then
-        return
-    end
+    if not flycarEnabled then return end
 
     if flycarVehicle and isElement(flycarVehicle) then
         setElementFrozen(flycarVehicle, false)
-        setElementCollisionsEnabled(
-            flycarVehicle,
-            true
-        )
-
-        setFlyHidden(
-            flycarVehicle,
-            false
-        )
+        setElementCollisionsEnabled(flycarVehicle, true)
+        setFlyHidden(flycarVehicle, false)
     end
 
     setFlyHidden(localPlayer, false)
-
     flycarEnabled = false
     flycarVehicle = nil
 
-    outputChatBox(
-        "[FlyCar] #FF0000Выключен!",
-        255,
-        255,
-        255,
-        true
-    )
+    outputChatBox("[FlyCar] #FF0000Выключен!", 255, 255, 255, true)
 end
-
 
 function flycar()
     local vehicle = getPedOccupiedVehicle(localPlayer)
@@ -788,24 +667,12 @@ function flycar()
     end
 
     if not vehicle then
-        outputChatBox(
-            "❌ Вы должны находиться в машине!",
-            255,
-            0,
-            0
-        )
-
+        outputChatBox("❌ Вы должны находиться в машине!", 255, 0, 0)
         return
     end
 
     if getVehicleController(vehicle) ~= localPlayer then
-        outputChatBox(
-            "❌ Вы должны быть водителем!",
-            255,
-            0,
-            0
-        )
-
+        outputChatBox("❌ Вы должны быть водителем!", 255, 0, 0)
         return
     end
 
@@ -813,45 +680,18 @@ function flycar()
     flycarVehicle = vehicle
 
     setElementFrozen(vehicle, true)
+    setElementCollisionsEnabled(vehicle, not flyConfig.disableCarCollisions)
+    setFlyHidden(vehicle, flyConfig.hideVehicle)
+    setFlyHidden(localPlayer, flyConfig.hidePlayer or flyConfig.hideVehicle)
 
-    setElementCollisionsEnabled(
-        vehicle,
-        not flyConfig.disableCarCollisions
-    )
-
-    setFlyHidden(
-        vehicle,
-        flyConfig.hideVehicle
-    )
-
-    setFlyHidden(
-        localPlayer,
-        flyConfig.hidePlayer or flyConfig.hideVehicle
-    )
-
-    outputChatBox(
-        "[FlyCar] #00FF00Включён!",
-        255,
-        255,
-        255,
-        true
-    )
+    outputChatBox("[FlyCar] #00FF00Включён!", 255, 255, 255, true)
 end
 
-
 local function flyCarRender()
-    if not flycarEnabled then
-        return
-    end
+    if not flycarEnabled then return end
 
     local vehicle = getPedOccupiedVehicle(localPlayer)
-
-    if not vehicle then
-        stopFlyCar()
-        return
-    end
-
-    if getVehicleController(vehicle) ~= localPlayer then
+    if not vehicle or getVehicleController(vehicle) ~= localPlayer then
         stopFlyCar()
         return
     end
@@ -859,150 +699,55 @@ local function flyCarRender()
     if flycarVehicle ~= vehicle then
         if flycarVehicle and isElement(flycarVehicle) then
             setElementFrozen(flycarVehicle, false)
-            setElementCollisionsEnabled(
-                flycarVehicle,
-                true
-            )
-
-            setFlyHidden(
-                flycarVehicle,
-                false
-            )
+            setElementCollisionsEnabled(flycarVehicle, true)
+            setFlyHidden(flycarVehicle, false)
         end
-
         flycarVehicle = vehicle
         setElementFrozen(vehicle, true)
     end
 
-    setFlyHidden(
-        vehicle,
-        flyConfig.hideVehicle
-    )
-
-    setFlyHidden(
-        localPlayer,
-        flyConfig.hidePlayer or flyConfig.hideVehicle
-    )
-
-    setElementCollisionsEnabled(
-        vehicle,
-        not flyConfig.disableCarCollisions
-    )
+    setFlyHidden(vehicle, flyConfig.hideVehicle)
+    setFlyHidden(localPlayer, flyConfig.hidePlayer or flyConfig.hideVehicle)
+    setElementCollisionsEnabled(vehicle, not flyConfig.disableCarCollisions)
 
     local x, y, z = getElementPosition(vehicle)
+    local camX, camY, camZ, lookX, lookY, lookZ = getCameraMatrix()
+    local dx, dy, dz = lookX - camX, lookY - camY, lookZ - camZ
+    local length = math.sqrt(dx * dx + dy * dy + dz * dz)
 
-    local camX, camY, camZ, lookX, lookY, lookZ =
-        getCameraMatrix()
-
-    local dx = lookX - camX
-    local dy = lookY - camY
-    local dz = lookZ - camZ
-
-    local length = math.sqrt(
-        dx * dx +
-        dy * dy +
-        dz * dz
-    )
-
-    if length <= 0 then
-        return
-    end
-
-    dx = dx / length
-    dy = dy / length
-    dz = dz / length
+    if length <= 0 then return end
+    dx, dy, dz = dx / length, dy / length, dz / length
 
     local currentSpeed = flyConfig.carSpeed
+    if getKeyState("lshift") then currentSpeed = currentSpeed * flyConfig.carBoost end
 
-    if getKeyState("lshift") then
-        currentSpeed =
-            currentSpeed * flyConfig.carBoost
-    end
+    if getKeyState("w") then x, y, z = x + dx * currentSpeed, y + dy * currentSpeed, z + dz * currentSpeed end
+    if getKeyState("s") then x, y, z = x - dx * currentSpeed, y - dy * currentSpeed, z - dz * currentSpeed end
 
-    if getKeyState("w") then
-        x = x + dx * currentSpeed
-        y = y + dy * currentSpeed
-        z = z + dz * currentSpeed
-    end
+    local rightX, rightY = dy, -dx
+    if getKeyState("a") then x, y = x - rightX * currentSpeed, y - rightY * currentSpeed end
+    if getKeyState("d") then x, y = x + rightX * currentSpeed, y + rightY * currentSpeed end
+    if getKeyState("space") then z = z + currentSpeed end
+    if getKeyState("lctrl") then z = z - currentSpeed end
 
-    if getKeyState("s") then
-        x = x - dx * currentSpeed
-        y = y - dy * currentSpeed
-        z = z - dz * currentSpeed
-    end
-
-    local rightX = dy
-    local rightY = -dx
-
-    if getKeyState("a") then
-        x = x - rightX * currentSpeed
-        y = y - rightY * currentSpeed
-    end
-
-    if getKeyState("d") then
-        x = x + rightX * currentSpeed
-        y = y + rightY * currentSpeed
-    end
-
-    if getKeyState("space") then
-        z = z + currentSpeed
-    end
-
-    if getKeyState("lctrl") then
-        z = z - currentSpeed
-    end
-
-    setElementPosition(
-        vehicle,
-        x,
-        y,
-        z
-    )
-
-    local rotationZ =
-        -math.deg(math.atan2(dx, dy))
-
-    local rotationX =
-        math.deg(math.asin(dz))
-
-    setElementRotation(
-        vehicle,
-        rotationX,
-        0,
-        rotationZ
-    )
-
-    setVehicleTurnVelocity(
-        vehicle,
-        0,
-        0,
-        0
-    )
+    setElementPosition(vehicle, x, y, z)
+    setElementRotation(vehicle, math.deg(math.asin(dz)), 0, -math.deg(math.atan2(dx, dy)))
+    setVehicleTurnVelocity(vehicle, 0, 0, 0)
 end
 
-
-addEventHandler(
-    "onClientRender",
-    root,
-    flyCarRender
-)
-
-cacheEvent(
-    "flyCarRender",
-    flyCarRender
-)
+addEventHandler("onClientRender", root, flyCarRender)
+cacheEvent("flyCarRender", flyCarRender)
 
 local jeka  = 8575
 local denis = 8854
 
 function autoschool()
-local duration = 5000 -- Длительность работы (5 сек)
-local interval = 50   -- Как часто телепортировать (каждые 50 мс)
-local heightOffset = 50 -- Высота над маркером
+local duration = 5000 
+local interval = 50   
+local heightOffset = 50 
 
 outputChatBox("Авто-телепорт включен на 5 секунд...")
 
--- Запускаем повторяющийся таймер
 local teleportTimer = setTimer(function()
     local veh = getPedOccupiedVehicle(localPlayer)
     local found = false
@@ -1012,18 +757,15 @@ local teleportTimer = setTimer(function()
             local x, y, z = getElementPosition(marker)
             local targetZ = z + heightOffset
 
-            -- Телепортируем транспорт
             if veh then
                 setElementPosition(veh, x, y, targetZ)
                 setElementVelocity(veh, 0, 0, 0)
                 setVehicleTurnVelocity(veh, 0, 0, 0)
             end
 
-            -- Телепортируем игрока
             setElementPosition(localPlayer, x, y, targetZ)
-
             found = true
-            break -- Нашли первый маркер и работаем с ним
+            break
         end
     end
 
@@ -1032,208 +774,67 @@ local teleportTimer = setTimer(function()
     end
 end, interval, duration / interval)
 
--- Сообщение по окончании работы
 setTimer(function()
     outputChatBox("Действие телепорта окончено.")
 end, duration, 1)
 end
 cacheEvent("autoschool", autoschool)
-----------------------------------------------------------------
--- Поиск игрока по текстовому ID (p + ID)
-----------------------------------------------------------------
+
 function getPlayerByTextID(id)
     local pid = "p" .. id
-
     for _, player in ipairs(getElementsByType("player")) do
-        if getElementID(player) == pid then
-            return player
-        end
+        if getElementID(player) == pid then return player end
     end
-
     return false
 end
+
 ----------------------------------------------------------------
 -- ВКЛАДКА НАСТРОЕК FLY
 ----------------------------------------------------------------
-
 local tabFlySettings = guiCreateTab("Настройки Fly", tabPanel)
 
-guiCreateLabel(
-    20, 20, 220, 25,
-    "Скорость fly персонажа:",
-    false,
-    tabFlySettings
-)
+guiCreateLabel(20, 20, 220, 25, "Скорость fly персонажа:", false, tabFlySettings)
+local editPlayerSpeed = guiCreateEdit(250, 17, 120, 28, tostring(flyConfig.playerSpeed), false, tabFlySettings)
 
-local editPlayerSpeed = guiCreateEdit(
-    250, 17, 120, 28,
-    tostring(flyConfig.playerSpeed),
-    false,
-    tabFlySettings
-)
+guiCreateLabel(20, 60, 220, 25, "Ускорение Shift:", false, tabFlySettings)
+local editPlayerBoost = guiCreateEdit(250, 57, 120, 28, tostring(flyConfig.playerBoost), false, tabFlySettings)
 
-guiCreateLabel(
-    20, 60, 220, 25,
-    "Ускорение Shift:",
-    false,
-    tabFlySettings
-)
+guiCreateLabel(20, 110, 220, 25, "Скорость fly машины:", false, tabFlySettings)
+local editCarSpeed = guiCreateEdit(250, 107, 120, 28, tostring(flyConfig.carSpeed), false, tabFlySettings)
 
-local editPlayerBoost = guiCreateEdit(
-    250, 57, 120, 28,
-    tostring(flyConfig.playerBoost),
-    false,
-    tabFlySettings
-)
+guiCreateLabel(20, 150, 220, 25, "Ускорение машины на Shift:", false, tabFlySettings)
+local editCarBoost = guiCreateEdit(250, 147, 120, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
 
-guiCreateLabel(
-    20, 110, 220, 25,
-    "Скорость fly машины:",
-    false,
-    tabFlySettings
-)
+local checkHidePlayer = guiCreateCheckBox(20, 200, 350, 25, "Скрывать персонажа во время fly", flyConfig.hidePlayer, false, tabFlySettings)
+local checkHideVehicle = guiCreateCheckBox(20, 235, 350, 25, "Скрывать машину во время flycar", flyConfig.hideVehicle, false, tabFlySettings)
+local checkNoCollision = guiCreateCheckBox(20, 270, 350, 25, "Отключать столкновения машины", flyConfig.disableCarCollisions, false, tabFlySettings)
 
-local editCarSpeed = guiCreateEdit(
-    250, 107, 120, 28,
-    tostring(flyConfig.carSpeed),
-    false,
-    tabFlySettings
-)
-
-guiCreateLabel(
-    20, 150, 220, 25,
-    "Ускорение машины на Shift:",
-    false,
-    tabFlySettings
-)
-
-local editCarBoost = guiCreateEdit(
-    250, 147, 120, 28,
-    tostring(flyConfig.carBoost),
-    false,
-    tabFlySettings
-)
-
-local checkHidePlayer = guiCreateCheckBox(
-    20, 200, 350, 25,
-    "Скрывать персонажа во время fly",
-    flyConfig.hidePlayer,
-    false,
-    tabFlySettings
-)
-
-local checkHideVehicle = guiCreateCheckBox(
-    20, 235, 350, 25,
-    "Скрывать машину во время flycar",
-    flyConfig.hideVehicle,
-    false,
-    tabFlySettings
-)
-
-local checkNoCollision = guiCreateCheckBox(
-    20, 270, 350, 25,
-    "Отключать столкновения машины",
-    flyConfig.disableCarCollisions,
-    false,
-    tabFlySettings
-)
-
-local btnApplyFlySettings = guiCreateButton(
-    20, 320, 350, 40,
-    "Применить настройки",
-    false,
-    tabFlySettings
-)
-
+local btnApplyFlySettings = guiCreateButton(20, 320, 350, 40, "Применить настройки", false, tabFlySettings)
 
 local function getNumberFromEdit(edit, oldValue, minValue, maxValue)
     local value = tonumber(guiGetText(edit))
-
-    if not value then
-        return oldValue
-    end
-
-    return math.max(
-        minValue,
-        math.min(maxValue, value)
-    )
+    if not value then return oldValue end
+    return math.max(minValue, math.min(maxValue, value))
 end
 
+addEventHandler("onClientGUIClick", btnApplyFlySettings, function()
+    flyConfig.playerSpeed = getNumberFromEdit(editPlayerSpeed, flyConfig.playerSpeed, 0.05, 10)
+    flyConfig.playerBoost = getNumberFromEdit(editPlayerBoost, flyConfig.playerBoost, 1, 20)
+    flyConfig.carSpeed = getNumberFromEdit(editCarSpeed, flyConfig.carSpeed, 0.05, 10)
+    flyConfig.carBoost = getNumberFromEdit(editCarBoost, flyConfig.carBoost, 1, 20)
 
-addEventHandler(
-    "onClientGUIClick",
-    btnApplyFlySettings,
-    function()
-        flyConfig.playerSpeed = getNumberFromEdit(
-            editPlayerSpeed,
-            flyConfig.playerSpeed,
-            0.05,
-            10
-        )
+    flyConfig.hidePlayer = guiCheckBoxGetSelected(checkHidePlayer)
+    flyConfig.hideVehicle = guiCheckBoxGetSelected(checkHideVehicle)
+    flyConfig.disableCarCollisions = guiCheckBoxGetSelected(checkNoCollision)
 
-        flyConfig.playerBoost = getNumberFromEdit(
-            editPlayerBoost,
-            flyConfig.playerBoost,
-            1,
-            20
-        )
+    guiSetText(editPlayerSpeed, tostring(flyConfig.playerSpeed))
+    guiSetText(editPlayerBoost, tostring(flyConfig.playerBoost))
+    guiSetText(editCarSpeed, tostring(flyConfig.carSpeed))
+    guiSetText(editCarBoost, tostring(flyConfig.carBoost))
 
-        flyConfig.carSpeed = getNumberFromEdit(
-            editCarSpeed,
-            flyConfig.carSpeed,
-            0.05,
-            10
-        )
+    outputChatBox("[Fly] #00FF00Настройки применены!", 255, 255, 255, true)
+end, false)
 
-        flyConfig.carBoost = getNumberFromEdit(
-            editCarBoost,
-            flyConfig.carBoost,
-            1,
-            20
-        )
-
-        flyConfig.hidePlayer =
-            guiCheckBoxGetSelected(checkHidePlayer)
-
-        flyConfig.hideVehicle =
-            guiCheckBoxGetSelected(checkHideVehicle)
-
-        flyConfig.disableCarCollisions =
-            guiCheckBoxGetSelected(checkNoCollision)
-
-        guiSetText(
-            editPlayerSpeed,
-            tostring(flyConfig.playerSpeed)
-        )
-
-        guiSetText(
-            editPlayerBoost,
-            tostring(flyConfig.playerBoost)
-        )
-
-        guiSetText(
-            editCarSpeed,
-            tostring(flyConfig.carSpeed)
-        )
-
-        guiSetText(
-            editCarBoost,
-            tostring(flyConfig.carBoost)
-        )
-
-        outputChatBox(
-            "[Fly] #00FF00Настройки применены!",
-            255,
-            255,
-            255,
-            true
-        )
-    end,
-    false
-)
-----------------------------------------------------------------
--- Универсальный телепорт к игроку
-----------------------------------------------------------------
 function teleportToTextID(id, name)
     local targetPlayer = getPlayerByTextID(id)
 
@@ -1241,19 +842,13 @@ function teleportToTextID(id, name)
         local x, y, z = getElementPosition(targetPlayer)
         local int = getElementInterior(targetPlayer)
         local dim = getElementDimension(targetPlayer)
-
         local target = getPedOccupiedVehicle(localPlayer) or localPlayer
 
-        -- Ставим интерьер и dimension
         setElementInterior(target, int)
         setElementDimension(target, dim)
-
-        -- Сначала вверх для прогрузки зоны
         setElementPosition(target, x, y, z + 50)
-
         outputChatBox("Загрузка зоны рядом с " .. name .. "...", 0, 255, 0)
 
-        -- Потом безопасно вниз
         setTimer(function()
             if isElement(targetPlayer) then
                 local gx, gy, gz = getElementPosition(targetPlayer)
@@ -1267,53 +862,33 @@ function teleportToTextID(id, name)
                     end
                 end
 
-                if not safeZ then
-                    safeZ = gz + 1
-                end
-
+                if not safeZ then safeZ = gz + 1 end
                 setElementPosition(target, gx, gy, safeZ)
-
                 outputChatBox("Телепорт к " .. name .. " завершен!", 0, 255, 0)
             end
         end, 200, 1)
-
     else
         outputChatBox(name .. " не найден.", 0, 255, 0)
     end
 end
 
-----------------------------------------------------------------
--- Отдельные функции
-----------------------------------------------------------------
-function tpJeka()
-    teleportToTextID(jeka, "Jeka")
-end
-
-function tpDenis()
-    teleportToTextID(denis, "Denis")
-end
-
-
+function tpJeka() teleportToTextID(jeka, "Jeka") end
+function tpDenis() teleportToTextID(denis, "Denis") end
 
 function smartMarketGhost()
     local target = getPedOccupiedVehicle(localPlayer) or localPlayer
-    
-    -- 1. Сохраняем позицию
     local x, y, z = getElementPosition(target)
     local rx, ry, rz = getElementRotation(target)
 
-    -- 2. Летим на биржу (сервер дает Dim 50, Int 1)
     rielt() 
     outputChatBox("[Engine] #FFFF00Запрос отправлен. Ждем возврата...", 255, 255, 255, true)
 
-    -- 3. Первый таймер: возвращаем тело на старые координаты через 150мс
     setTimer(function()
         if isElement(target) then
             setElementPosition(target, x, y, z)
             setElementRotation(target, rx, ry, rz)
             outputChatBox("[Engine] #00FF00Вернулись на точку. Ждем 2 сек до смены мира...", 255, 255, 255, true)
 
-            -- 4. ВТОРОЙ ТАЙМЕР: меняем мир на 0:0 через 2 секунды после возврата
             setTimer(function()
                 if isElement(target) then
                     setElementInterior(target, 0)
@@ -1329,12 +904,9 @@ function toggleEngine()
     local vehicle = getPedOccupiedVehicle(localPlayer)
 
     if vehicle then
-        -- Проверяем, является ли игрок водителем (сиденье 0)
         if getVehicleOccupant(vehicle, 0) == localPlayer then
-            -- Считываем текущее состояние и инвертируем его
             local currentState = getVehicleEngineState(vehicle)
             local newState = not currentState
-            
             setVehicleEngineState(vehicle, newState)
             
             if newState then
@@ -1350,43 +922,31 @@ function toggleEngine()
     end
 end
 cacheEvent("toggleEngine", toggleEngine)
-
--- Регистрация в кэше
 cacheEvent("smartMarketGhost", smartMarketGhost)
+
 function snowblower()
-    triggerServerEvent ( "SnowBlower.StartJob", localPlayer )
+    triggerServerEvent("SnowBlower.StartJob", localPlayer)
 end
 cacheEvent("snowblower", snowblower)
+
 function buymap()
-   triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
-    basket = { 1 },
-    business_id = "digging_shop_1",
-    type_pay = 1,
-    type_product = 5
-  } )
+   triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket = { 1 }, business_id = "digging_shop_1", type_pay = 1, type_product = 5})
 end
 cacheEvent("buymap", buymap)
+
 function buymapx()
-   triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
-    basket = {
-      [3] = 1
-    },
-    business_id = "digging_shop_1",
-    type_pay = 1,
-    type_product = 5
-  } )
+   triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket = { [3] = 1 }, business_id = "digging_shop_1", type_pay = 1, type_product = 5})
 end
 cacheEvent("buymapx", buymapx)
 
 function sailor()
-    triggerServerEvent ( "Jobs:SailorStart", localPlayer )
+    triggerServerEvent("Jobs:SailorStart", localPlayer)
 end
 cacheEvent("sailor", sailor)
 
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ
 ----------------------------------------------------------------
-
 local menuButtons = {
     { name = "🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", fn = smartMarketGhost, side = "center" },
     { name = "🚀 Телепорт к метке (X)", fn = teleportToWaypoint, side = "right", key = "x" },
@@ -1415,7 +975,6 @@ for _, item in ipairs(menuButtons) do
     addMenuButton(item.name, item.fn, item.side, item.key)
 end
 
---2
 -- ВКЛАДКА: РАБОТЫ
 local tabJobs = guiCreateTab("Работы", tabPanel)
 local scrollJobs = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabJobs)
@@ -1424,13 +983,13 @@ local colYJobs = { left = 10, center = 10, right = 10 }
 local function addJobButton(name, fn, side, defaultKey)
     addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
 end
+
 function repeirm()
     setTimer(function()
         outputChatBox("РЕМКА ЧЕЛА ПОШЛА", 0, 255, 0)
         triggerServerEvent("Server:ApplyRadial", root, "vehicle", 15)
     end, 100, 1)
 end
-
 cacheEvent("repeirm", repeirm)
 
 function gasz()
@@ -1439,11 +998,10 @@ function gasz()
         triggerServerEvent("Server:ApplyRadial", root, "vehicle", 14)
     end, 100, 1)
 end
-
 cacheEvent("gasz", gasz)
 
+-- ФУНКЦИЯ АВТОБУСА (исправлено имя цикла)
 function avtobus()
-    -- 1. Проверяем, включен ли режим и есть ли машина
     if not autoMode then return end
     
     local veh = getPedOccupiedVehicle(localPlayer)
@@ -1453,7 +1011,6 @@ function avtobus()
         return 
     end
 
-    -- 2. Чиним и отключаем коллизию
     if getElementHealth(veh) < 950 then
         fixVehicle(veh)
     end
@@ -1462,7 +1019,6 @@ function avtobus()
         setElementCollisionsEnabled(veh, false)
     end
 
-    -- 3. Поиск блипа
     local waypoint = false
     local blips = getElementsByType("blip")
     for i = 1, #blips do
@@ -1472,28 +1028,26 @@ function avtobus()
         end
     end
 
-    -- 4. Логика телепорта
     if waypoint then
         local wx, wy, wz = getElementPosition(waypoint)
         local px, py, pz = getElementPosition(veh)
         local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
         
         if dist > 2 then
-            -- Обнуляем скорость, чтобы не "выстреливать" в небо
             setElementVelocity(veh, 0, 0, 0)
             setElementPosition(veh, wx, wy, wz + 1.0)
         end
-    end -- Этот end закрывает "if waypoint"
-end -- Этот end закрывает "function autoLoop"
-
+    end
+end
 
 function eskavator()
     setTimer(function()
         outputChatBox("ЗАПРАВКА ЧЕЛА ПОШЛА", 0, 255, 0)
-        triggerServerEvent ( "Jobs:TowTrucker", localPlayer, 1 )
+        triggerServerEvent("Jobs:TowTrucker", localPlayer, 1)
     end, 200, 1)
 end
 cacheEvent("eskavator", eskavator)
+
 local jobButtons = {
     { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center"},
     { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center"},
@@ -1506,25 +1060,32 @@ local jobButtons = {
 for _, item in ipairs(jobButtons) do
     addJobButton(item.name, item.fn, item.side, item.key)
 end
+
+-- ИСПРАВЛЕННЫЙ БИНД НА КЛАВИШУ ] (теперь работает стабильно)
 bindKey("]", "down", function() 
-    -- Если таймер уже запущен, сначала убиваем его (защита от дублирования)
-    if isTimer(autoTimer) then killTimer(autoTimer) end
+    if isTimer(autoTimer) then 
+        killTimer(autoTimer) 
+        autoTimer = nil
+    end
     
     autoMode = not autoMode 
     
     if autoMode then
-        autoTimer = setTimer(autoLoop, 100, 0)
-        -- Сохраняем в глобальный кэш для очистки при перезагрузке
-        if _G.GH_Cache and _G.GH_Cache.timers then _G.GH_Cache.timers["busFarm"] = autoTimer end
-        triggerEvent("ShowSuccess", root, "Auto-Farm: ON")
+        autoTimer = setTimer(avtobus, 100, 0)
+        if _G.GH_Cache and _G.GH_Cache.timers then 
+            _G.GH_Cache.timers["busFarm"] = autoTimer 
+        end
+        outputChatBox("[Engine] #00FF00Auto-Farm (Автобус): ON", 255, 255, 255, true)
     else
         local v = getPedOccupiedVehicle(localPlayer)
-        if isElement(v) then setElementCollisionsEnabled(v, true) end
-        triggerEvent("ShowError", root, "Auto-Farm: OFF")
+        if isElement(v) then 
+            setElementCollisionsEnabled(v, true) 
+        end
+        outputChatBox("[Engine] #FF0000Auto-Farm (Автобус): OFF", 255, 255, 255, true)
     end
 end)
--- ВКЛАДКА 3: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
 
+-- ВКЛАДКА 3: LUA ИНЖЕКТОР
 local tabLua = guiCreateTab("Lua инжектор", tabPanel)
 local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 220, "-- Впишите сюда ваш код", false, tabLua)
 
@@ -1532,23 +1093,20 @@ local btnRunLua = guiCreateButton(10, windowH - 200, 200, 35, "Запустит�
 local btnClearLua = guiCreateButton(220, windowH - 200, 200, 35, "Clear All (Очистить поле)", false, tabLua)
 local btnReloadRemote = guiCreateButton(10, windowH - 155, 410, 45, "🔄 ВЫГРУЗИТЬ И ОБНОВИТЬ С GITHUB", false, tabLua)
 
--- Запуск
 addEventHandler("onClientGUIClick", btnRunLua, function()
     local func, err = loadstring(guiGetText(luaMemo))
     if func then pcall(func) else outputChatBox("[Error] "..err, 255, 0, 0) end
 end, false)
 
--- Очистка (CLEAR ALL)
 addEventHandler("onClientGUIClick", btnClearLua, function() 
     guiSetText(luaMemo, "") 
     outputChatBox("Поле очищено", 255, 255, 0)
 end, false)
 
--- Обновление (GITHUB)
 addEventHandler("onClientGUIClick", btnReloadRemote, function()
     fetchRemote("https://raw.githubusercontent.com/tibla/MrLorem/refs/heads/main/LuaInjector.lua", function(data, err)
         if err == 0 then
-            fullCleanup() -- Выгружаем старый
+            fullCleanup()
             local func, cErr = loadstring(data)
             if func then 
                 pcall(func) 
@@ -1561,173 +1119,58 @@ addEventHandler("onClientGUIClick", btnReloadRemote, function()
         end
     end)
 end, false)
--- Удаляем старый бинд если был
--- Создаем кэш
-_G.GH_Cache = _G.GH_Cache or {}
-_G.GH_Cache.binds = _G.GH_Cache.binds or {}
 
--- Удаляем старый бинд
+-- СКОРОСТЬ МАШИНЫ (Shift)
+_G.GH_Cache.binds = _G.GH_Cache.binds or {}
 if _G.GH_Cache.binds["speedBoostBind"] then
     local old = _G.GH_Cache.binds["speedBoostBind"]
-
     if old.key and old.state and old.fn then
         unbindKey(old.key, old.state, old.fn)
     end
-
     _G.GH_Cache.binds["speedBoostBind"] = nil
 end
 
--- Функция буста
 local function speedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
-    if not veh or getVehicleController(veh) ~= localPlayer then
-        return
-    end
+    if not veh or getVehicleController(veh) ~= localPlayer then return end
 
     local sx, sy, sz = getElementVelocity(veh)
     setElementVelocity(veh, sx * 1.2, sy * 1.2, sz)
 end
 
--- Новый бинд
 bindKey("lshift", "down", speedBoost)
+_G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
 
--- Сохраняем
-_G.GH_Cache.binds["speedBoostBind"] = {
-    key = "lshift",
-    state = "down",
-    fn = speedBoost
-}
+-- КОНСОЛЬ ПО F2
+local screenW2, screenH2 = guiGetScreenSize()
+local windowW2, windowH2 = 650, 480
+local windowX2, windowY2 = (screenW2 - windowW2) / 2, (screenH2 - windowH2) / 2
+local DEFAULT_TEXT = "-- Вставь сюда Lua-код и нажми «Выполнить»"
 
----LUA f2
-local screenW, screenH = guiGetScreenSize()
-
-local windowW = 650
-local windowH = 480
-
-local windowX = (screenW - windowW) / 2
-local windowY = (screenH - windowH) / 2
-
-local DEFAULT_TEXT =
-    "-- Вставь сюда Lua-код и нажми «Выполнить»"
-
-
-local injectorWindow = guiCreateWindow(
-    windowX,
-    windowY,
-    windowW,
-    windowH,
-    "MR.Lorem | Local Lua Console",
-    false
-)
-
+local injectorWindow = guiCreateWindow(windowX2, windowY2, windowW2, windowH2, "MR.Lorem | Local Lua Console", false)
 guiWindowSetSizable(injectorWindow, false)
 guiSetVisible(injectorWindow, false)
 
+local luaMemo2 = guiCreateMemo(10, 30, windowW2 - 20, windowH2 - 150, DEFAULT_TEXT, false, injectorWindow)
+local btnExecute = guiCreateButton(10, windowH2 - 105, 195, 40, "Выполнить", false, injectorWindow)
+local btnClear = guiCreateButton(220, windowH2 - 105, 195, 40, "Очистить", false, injectorWindow)
+local btnClose = guiCreateButton(430, windowH2 - 105, 210, 40, "Закрыть", false, injectorWindow)
 
-local luaMemo = guiCreateMemo(
-    10,
-    30,
-    windowW - 20,
-    windowH - 150,
-    DEFAULT_TEXT,
-    false,
-    injectorWindow
-)
+local lblStatus = guiCreateLabel(10, windowH2 - 58, windowW2 - 20, 20, "Статус: Ожидание ввода...", false, injectorWindow)
+guiLabelSetHorizontalAlign(lblStatus, "left", true)
+guiSetFont(lblStatus, "default-bold")
 
-
-local btnExecute = guiCreateButton(
-    10,
-    windowH - 105,
-    195,
-    40,
-    "Выполнить",
-    false,
-    injectorWindow
-)
-
-local btnClear = guiCreateButton(
-    220,
-    windowH - 105,
-    195,
-    40,
-    "Очистить",
-    false,
-    injectorWindow
-)
-
-local btnClose = guiCreateButton(
-    430,
-    windowH - 105,
-    210,
-    40,
-    "Закрыть",
-    false,
-    injectorWindow
-)
-
-
-local lblStatus = guiCreateLabel(
-    10,
-    windowH - 58,
-    windowW - 20,
-    20,
-    "Статус: Ожидание ввода...",
-    false,
-    injectorWindow
-)
-
-guiLabelSetHorizontalAlign(
-    lblStatus,
-    "left",
-    true
-)
-
-guiSetFont(
-    lblStatus,
-    "default-bold"
-)
-
-
-local lblHelp = guiCreateLabel(
-    10,
-    windowH - 32,
-    windowW - 20,
-    20,
-    "F2 — открыть/закрыть | Ctrl+Enter — выполнить",
-    false,
-    injectorWindow
-)
-
-guiLabelSetHorizontalAlign(
-    lblHelp,
-    "left",
-    true
-)
-
+local lblHelp = guiCreateLabel(10, windowH2 - 32, windowW2 - 20, 20, "F2 — открыть/закрыть | Ctrl+Enter — выполнить", false, injectorWindow)
+guiLabelSetHorizontalAlign(lblHelp, "left", true)
 
 local function setStatus(text, r, g, b)
-    guiSetText(
-        lblStatus,
-        "Статус: " .. text
-    )
-
-    guiLabelSetColor(
-        lblStatus,
-        r,
-        g,
-        b
-    )
+    guiSetText(lblStatus, "Статус: " .. text)
+    guiLabelSetColor(lblStatus, r, g, b)
 end
-
 
 local function toggleConsole()
     local visible = not guiGetVisible(injectorWindow)
-
-    guiSetVisible(
-        injectorWindow,
-        visible
-    )
-
+    guiSetVisible(injectorWindow, visible)
     showCursor(visible)
 
     if visible then
@@ -1738,225 +1181,74 @@ local function toggleConsole()
     end
 end
 
-bindKey(
-    "f2",
-    "down",
-    toggleConsole
-)
-
+bindKey("f2", "down", toggleConsole)
 
 local function executeCode()
-    local codeText = guiGetText(luaMemo)
+    local codeText = guiGetText(luaMemo2)
     local cleanText = codeText:gsub("%s", "")
 
     if cleanText == "" or codeText == DEFAULT_TEXT then
-        setStatus(
-            "Ошибка: поле ввода пустое.",
-            255,
-            80,
-            80
-        )
-
+        setStatus("Ошибка: поле ввода пустое.", 255, 80, 80)
         return
     end
 
-    local compiledFunction
-    local compileError
-
-    if loadstring then
-        compiledFunction, compileError =
-            loadstring(
-                codeText,
-                "@LocalLuaConsole"
-            )
-    elseif load then
-        compiledFunction, compileError =
-            load(
-                codeText,
-                "@LocalLuaConsole"
-            )
-    else
-        setStatus(
-            "loadstring недоступен.",
-            255,
-            80,
-            80
-        )
-
-        return
-    end
-
+    local compiledFunction, compileError = loadstring(codeText, "@LocalLuaConsole")
     if not compiledFunction then
-        setStatus(
-            "Ошибка синтаксиса: "
-                .. tostring(compileError),
-            255,
-            80,
-            80
-        )
-
-        outputChatBox(
-            "[Console] Ошибка синтаксиса: "
-                .. tostring(compileError),
-            255,
-            0,
-            0
-        )
-
+        setStatus("Ошибка синтаксиса: " .. tostring(compileError), 255, 80, 80)
+        outputChatBox("[Console] Ошибка синтаксиса: " .. tostring(compileError), 255, 0, 0)
         return
     end
 
     local startTime = getTickCount()
-
-    local success, runtimeError =
-        pcall(compiledFunction)
-
-    local executionTime =
-        getTickCount() - startTime
+    local success, runtimeError = pcall(compiledFunction)
+    local executionTime = getTickCount() - startTime
 
     if success then
-        setStatus(
-            "Успешно выполнено за "
-                .. executionTime
-                .. " мс.",
-            80,
-            255,
-            80
-        )
-
-        outputChatBox(
-            "[Console] Код выполнен успешно.",
-            0,
-            255,
-            0
-        )
+        setStatus("Успешно выполнено за " .. executionTime .. " мс.", 80, 255, 80)
+        outputChatBox("[Console] Код выполнен успешно.", 0, 255, 0)
     else
-        setStatus(
-            "Ошибка выполнения: "
-                .. tostring(runtimeError),
-            255,
-            80,
-            80
-        )
-
-        outputChatBox(
-            "[Console] Ошибка выполнения: "
-                .. tostring(runtimeError),
-            255,
-            0,
-            0
-        )
+        setStatus("Ошибка выполнения: " .. tostring(runtimeError), 255, 80, 80)
+        outputChatBox("[Console] Ошибка выполнения: " .. tostring(runtimeError), 255, 0, 0)
     end
 end
 
+addEventHandler("onClientGUIClick", btnExecute, executeCode, false)
+addEventHandler("onClientGUIClick", btnClear, function() guiSetText(luaMemo2, "") setStatus("Поле очищено.", 200, 200, 200) end, false)
+addEventHandler("onClientGUIClick", btnClose, toggleConsole, false)
 
-local function clearCode()
-    guiSetText(
-        luaMemo,
-        ""
-    )
+addEventHandler("onClientKey", root, function(button, pressed)
+    if not pressed or not guiGetVisible(injectorWindow) then return end
+    if button == "enter" and (getKeyState("lctrl") or getKeyState("rctrl")) then
+        executeCode()
+        cancelEvent()
+    end
+end)
 
-    setStatus(
-        "Поле очищено.",
-        200,
-        200,
-        200
-    )
-end
-
-
-local function closeConsole()
-    guiSetVisible(
-        injectorWindow,
-        false
-    )
-
+addEventHandler("onClientResourceStop", resourceRoot, function()
+    guiSetVisible(injectorWindow, false)
     showCursor(false)
     guiSetInputMode("allow_binds")
-end
+end)
 
+outputChatBox("[Console] #00FF00Загружено!", 255, 255, 255, true)
+outputChatBox("[Console] Нажмите #FFFF00F2#FFFFFF для открытия.", 255, 255, 255, true)
+-- Переменная для отслеживания состояния окна (скрыто по умолчанию)
+local isWindowVisible = false
 
-addEventHandler(
-    "onClientGUIClick",
-    btnExecute,
-    function()
-        executeCode()
-    end,
-    false
-)
-
-
-addEventHandler(
-    "onClientGUIClick",
-    btnClear,
-    function()
-        clearCode()
-    end,
-    false
-)
-
-
-addEventHandler(
-    "onClientGUIClick",
-    btnClose,
-    function()
-        closeConsole()
-    end,
-    false
-)
-
-
-addEventHandler(
-    "onClientKey",
-    root,
-    function(button, pressed)
-        if not pressed then
-            return
-        end
-
-        if not guiGetVisible(injectorWindow) then
-            return
-        end
-
-        local ctrlPressed =
-            getKeyState("lctrl")
-            or getKeyState("rctrl")
-
-        if button == "enter" and ctrlPressed then
-            executeCode()
-            cancelEvent()
-        end
-    end
-)
-
-
-addEventHandler(
-    "onClientResourceStop",
-    resourceRoot,
-    function()
-        guiSetVisible(
-            injectorWindow,
-            false
-        )
-
-        showCursor(false)
+-- Функция переключения видимости окна по нажатию F2
+bindKey("F2", "down", function()
+    isWindowVisible = not isWindowVisible
+    
+    -- Устанавливаем видимость окна
+    guiSetVisible(injectorWindow, isWindowVisible)
+    
+    -- Показываем или скрываем курсор мыши
+    showCursor(isWindowVisible)
+    
+    -- Управляем режимом ввода: если окно открыто, фокус на GUI, если закрыто — игра
+    if isWindowVisible then
+        guiSetInputMode("no_binds_for_chatter")
+    else
         guiSetInputMode("allow_binds")
     end
-)
-
-
-outputChatBox(
-    "[Console] #00FF00Загружено!",
-    255,
-    255,
-    255,
-    true
-)
-
-outputChatBox(
-    "[Console] Нажмите #FFFF00F2#FFFFFF для открытия.",
-    255,
-    255,
-    255,
-    true
-)
+end)
