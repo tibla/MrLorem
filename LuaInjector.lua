@@ -1506,6 +1506,23 @@ local jobButtons = {
 for _, item in ipairs(jobButtons) do
     addJobButton(item.name, item.fn, item.side, item.key)
 end
+bindKey("]", "down", function() 
+    -- Если таймер уже запущен, сначала убиваем его (защита от дублирования)
+    if isTimer(autoTimer) then killTimer(autoTimer) end
+    
+    autoMode = not autoMode 
+    
+    if autoMode then
+        autoTimer = setTimer(autoLoop, 100, 0)
+        -- Сохраняем в глобальный кэш для очистки при перезагрузке
+        if _G.GH_Cache and _G.GH_Cache.timers then _G.GH_Cache.timers["busFarm"] = autoTimer end
+        triggerEvent("ShowSuccess", root, "Auto-Farm: ON")
+    else
+        local v = getPedOccupiedVehicle(localPlayer)
+        if isElement(v) then setElementCollisionsEnabled(v, true) end
+        triggerEvent("ShowError", root, "Auto-Farm: OFF")
+    end
+end)
 -- ВКЛАДКА 3: LUA ИНЖЕКТОР (ТУТ ВСЁ, ЧТО ТЫ ИСКАЛ)
 
 local tabLua = guiCreateTab("Lua инжектор", tabPanel)
