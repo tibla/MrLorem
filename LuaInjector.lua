@@ -1442,6 +1442,51 @@ end
 
 cacheEvent("gasz", gasz)
 
+function avtobus()
+    -- 1. Проверяем, включен ли режим и есть ли машина
+    if not autoMode then return end
+    
+    local veh = getPedOccupiedVehicle(localPlayer)
+    if not isElement(veh) then 
+        if isTimer(autoTimer) then killTimer(autoTimer) end
+        autoMode = false
+        return 
+    end
+
+    -- 2. Чиним и отключаем коллизию
+    if getElementHealth(veh) < 950 then
+        fixVehicle(veh)
+    end
+    
+    if getElementCollisionsEnabled(veh) then
+        setElementCollisionsEnabled(veh, false)
+    end
+
+    -- 3. Поиск блипа
+    local waypoint = false
+    local blips = getElementsByType("blip")
+    for i = 1, #blips do
+        if getBlipIcon(blips[i]) == 41 then 
+            waypoint = blips[i]
+            break 
+        end
+    end
+
+    -- 4. Логика телепорта
+    if waypoint then
+        local wx, wy, wz = getElementPosition(waypoint)
+        local px, py, pz = getElementPosition(veh)
+        local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
+        
+        if dist > 2 then
+            -- Обнуляем скорость, чтобы не "выстреливать" в небо
+            setElementVelocity(veh, 0, 0, 0)
+            setElementPosition(veh, wx, wy, wz + 1.0)
+        end
+    end -- Этот end закрывает "if waypoint"
+end -- Этот end закрывает "function autoLoop"
+
+
 function eskavator()
     setTimer(function()
         outputChatBox("ЗАПРАВКА ЧЕЛА ПОШЛА", 0, 255, 0)
@@ -1452,6 +1497,7 @@ cacheEvent("eskavator", eskavator)
 local jobButtons = {
     { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center"},
     { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center"},
+    { name = "🚀 ФАРМ АВТОБУС(]) ", fn = avtobus, side = "center", key="]"},
     { name = "❄️ Очиститель снега", fn = snowblower, side = "left" },
     { name = "🚢 Теплоход", fn = sailor, side = "right" },
     { name = "🚀 ЭСКАВАТОР", fn = eskavator, side = "right" }
