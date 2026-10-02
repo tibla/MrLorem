@@ -1,3 +1,4 @@
+
 ----------------------------------------------------------------
 -- ГЛОБАЛЬНАЯ ТАБЛИЦА И ОЧИСТКА
 ----------------------------------------------------------------
@@ -108,14 +109,132 @@ local scrollFun = guiCreateScrollPane(
     false,
     tabFun
 )
+local colY = {
+    left = 10,
+    center = 10,
+    right = 10
+}
 
+local columnX = {
+    left = 10,
+    center = 250,
+    right = 490
+}
+
+
+local function addActionButton(
+    parent,
+    columns,
+    name,
+    fn,
+    side,
+    defaultKey
+)
+    side = side or "left"
+
+    local posX = columnX[side] or columnX.left
+    local posY = columns[side] or columns.left
+
+    local actionButton = guiCreateButton(
+        posX,
+        posY,
+        185,
+        35,
+        name,
+        false,
+        parent
+    )
+
+    local bindButton = guiCreateButton(
+        posX + 190,
+        posY,
+        40,
+        35,
+        defaultKey and string.upper(defaultKey) or "?",
+        false,
+        parent
+    )
+
+    bindsData[bindButton] = {
+        fn = fn,
+        key = defaultKey,
+        name = name
+    }
+
+    if defaultKey then
+        bindKey(
+            defaultKey,
+            "down",
+            fn
+        )
+    end
+
+    addEventHandler(
+        "onClientGUIClick",
+        actionButton,
+        function()
+            if not waitingForBind then
+                fn()
+            end
+        end,
+        false
+    )
+
+    addEventHandler(
+        "onClientGUIClick",
+        bindButton,
+        function()
+            if waitingForBind
+                and bindsData[waitingForBind]
+            then
+                local previous =
+                    bindsData[waitingForBind].key
+
+                guiSetText(
+                    waitingForBind,
+                    previous
+                        and string.upper(previous)
+                        or "?"
+                )
+            end
+
+            waitingForBind = source
+            guiSetText(source, "...")
+
+            outputChatBox(
+                "Нажми клавишу для бинда.",
+                255,
+                255,
+                0
+            )
+        end,
+        false
+    )
+
+    columns[side] = posY + 40
+end
+
+
+local function addMenuButton(
+    name,
+    fn,
+    side,
+    defaultKey
+)
+    addActionButton(
+        scrollFun,
+        colY,
+        name,
+        fn,
+        side,
+        defaultKey
+    )
+end
 bindKey("f9", "down", function()
     local visible = not guiGetVisible(mainWin)
 
     guiSetVisible(mainWin, visible)
     showCursor(visible)
-
-    waitingForBind = nil
 end)
 
 outputChatBox(
