@@ -943,7 +943,9 @@ function sailor()
     triggerServerEvent("Jobs:SailorStart", localPlayer)
 end
 cacheEvent("sailor", sailor)
-
+function rynok()
+triggerServerEvent ( "CentralMarket:AcceptEnter", root )
+end
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ
 ----------------------------------------------------------------
