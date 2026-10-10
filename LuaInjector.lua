@@ -1707,3 +1707,308 @@ bindKey("lshift", "down", speedBoost)
 _G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
 
 outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
+-- Standalone MTA:SA Event Dumper
+-- Native MTA GUI only: guiCreateWindow/guiCreateMemo/guiCreateButton
+-- F1 - open/close window
+-- Esc - close window
+
+local eventLines = {}
+local dumperWindow
+local eventMemo
+local infoLabel
+local clearButton
+local copyLastButton
+local copyButton
+local closeButton
+local hookInstalled = false
+
+local LOG_MAX_LINES = 3000
+
+local ignoredEvents = {
+    ["CB:SetGroupHealthBuff"] = true,
+    ["onCaloriesUpdate"] = true,
+    ["lossHungryHealth"] = true,
+    ["OnPlayerWantGetPromoStatistics"] = true,
+    ["ChatStart"] = true,
+    ["ChatStop"] = true,
+    ["OnUpdateStaminaHandler"] = true,
+    ["Trade:Destroy"] = true,
+    ["loadVehicleDirtServer"] = true,
+    ["saveWindowsPositionServer"] = true,
+    ["afk:cancelByKey"] = true,
+    ["onPlayerAFKStateChange"] = true,
+}
+
+local function quoteString(value)
+    return string.format("%q", tostring(value))
+end
+
+local function serializeArgument(value, depth, visited)
+    depth = depth or 0
+    visited = visited or {}
+
+    if value == nil then
+        return "nil"
+    end
+
+    if value == localPlayer then
+        return "localPlayer"
+    end
+
+    if value == root then
+        return "root"
+    end
+
+    if value == resourceRoot then
+        return "root"
+    end
+
+    if type(isElement) == "function" and isElement(value) then
+        local elementType = getElementType(value)
+
+        -- `elem:resource` is only an inspect/debug label, not valid Lua.
+        -- Use a real MTA element expression in copied event calls.
+        if elementType == "resource" or elementType == "root" then
+            return "root"
+        end
+
+        if elementType == "vehicle"
+            and type(getPedOccupiedVehicle) == "function"
+            and value == getPedOccupiedVehicle(localPlayer)
+        then
+            return "localPlayer.vehicle"
+        end
+
+        if elementType == "player" and type(getPlayerName) == "function" then
+            return "getPlayerFromName(" .. quoteString(getPlayerName(value)) .. ")"
+        end
+
+        return "elem:" .. tostring(elementType or "unknown")
+    end
+
+    local valueType = type(value)
+    if valueType == "string" then
+        return quoteString(value)
+    elseif valueType == "number" or valueType == "boolean" then
+        return tostring(value)
+    elseif valueType == "table" then
+        if depth >= 3 or visited[value] then
+            return "{ ... }"
+        end
+
+        visited[value] = true
+        local parts = {}
+
+        for index, item in ipairs(value) do
+            parts[#parts + 1] = serializeArgument(item, depth + 1, visited)
+        end
+
+        for key, item in pairs(value) do
+            if type(key) ~= "number" or key < 1 or key > #value or key % 1 ~= 0 then
+                parts[#parts + 1] = "[" .. serializeArgument(key, depth + 1, visited)
+                    .. "] = " .. serializeArgument(item, depth + 1, visited)
+            end
+        end
+
+        visited[value] = nil
+        return "{ " .. table.concat(parts, ", ") .. " }"
+    end
+
+    return tostring(value)
+end
+
+local function buildEventCall(functionName, args)
+    local serialized = {}
+    for index = 1, #args do
+        serialized[index] = serializeArgument(args[index])
+    end
+
+    return tostring(functionName) .. " ( " .. table.concat(serialized, ", ") .. " )"
+end
+
+local function getEventLogText()
+    return table.concat(eventLines, "\n")
+end
+
+local function updateNativeGui()
+    if not isElement(eventMemo) then
+        return
+    end
+
+    guiSetText(eventMemo, getEventLogText())
+
+    if isElement(infoLabel) then
+        guiSetText(infoLabel, "Events: " .. tostring(#eventLines) .. " | F1: toggle | Esc: close")
+    end
+
+    if #eventLines > 0 then
+        guiMemoSetCaretIndex(eventMemo, #getEventLogText())
+    end
+end
+
+local function appendEventLine(text)
+    eventLines[#eventLines + 1] = tostring(text or "")
+
+    if #eventLines > LOG_MAX_LINES then
+        table.remove(eventLines, 1)
+    end
+
+    updateNativeGui()
+end
+
+local function clearEventLog()
+    eventLines = {}
+    updateNativeGui()
+end
+
+local function copyAllEvents()
+    if type(setClipboard) == "function" and #eventLines > 0 then
+        pcall(setClipboard, getEventLogText())
+    end
+end
+
+local function copyLastEvent()
+    if type(setClipboard) == "function" and #eventLines > 0 then
+        pcall(setClipboard, eventLines[#eventLines])
+    end
+end
+
+local function eventDumper(sourceResource, functionName, isAllowedByACL, luaFilename, luaLineNumber, ...)
+    local args = { ... }
+    local eventName = tostring(args[1])
+    local resourceName = sourceResource and getResourceName(sourceResource) or "unknown"
+    if resourceName == "nrp_player_head" or ignoredEvents[eventName] then
+        return
+    end
+
+    appendEventLine(buildEventCall(functionName, args))
+end
+
+local function isDumperVisible()
+    return isElement(dumperWindow) and guiGetVisible(dumperWindow)
+end
+
+local function setDumperVisible(state)
+    if not isElement(dumperWindow) then
+        return
+    end
+
+    guiSetVisible(dumperWindow, state and true or false)
+    showCursor(state and true or false)
+
+    if state then
+        guiBringToFront(dumperWindow)
+        updateNativeGui()
+    end
+end
+
+local function toggleDumper()
+    setDumperVisible(not isDumperVisible())
+end
+
+local function createNativeGui()
+    if isElement(dumperWindow) then
+        return true
+    end
+
+    local screenWidth, screenHeight = guiGetScreenSize()
+    local windowWidth = math.min(1100, screenWidth - 80)
+    local windowHeight = math.min(700, screenHeight - 80)
+    local windowX = math.floor((screenWidth - windowWidth) * 0.5)
+    local windowY = math.floor((screenHeight - windowHeight) * 0.5)
+
+    dumperWindow = guiCreateWindow(windowX, windowY, windowWidth, windowHeight, "Events Dumper", false)
+    if not isElement(dumperWindow) then
+        return false
+    end
+
+    guiWindowSetSizable(dumperWindow, false)
+    guiWindowSetMovable(dumperWindow, true)
+
+    eventMemo = guiCreateMemo(10, 28, windowWidth - 20, windowHeight - 92, "", false, dumperWindow)
+    if isElement(eventMemo) then
+        guiMemoSetReadOnly(eventMemo, true)
+        guiSetFont(eventMemo, "default-small")
+    end
+
+    infoLabel = guiCreateLabel(12, windowHeight - 58, windowWidth - 420, 22, "Events: 0 | F1: toggle | Esc: close", false, dumperWindow)
+    if isElement(infoLabel) then
+        guiLabelSetVerticalAlign(infoLabel, "center")
+    end
+
+    clearButton = guiCreateButton(windowWidth - 410, windowHeight - 62, 90, 30, "Clear", false, dumperWindow)
+    copyLastButton = guiCreateButton(windowWidth - 310, windowHeight - 62, 90, 30, "Copy Last", false, dumperWindow)
+    copyButton = guiCreateButton(windowWidth - 210, windowHeight - 62, 90, 30, "Copy All", false, dumperWindow)
+    closeButton = guiCreateButton(windowWidth - 110, windowHeight - 62, 90, 30, "Close", false, dumperWindow)
+
+    if isElement(clearButton) then
+        addEventHandler("onClientGUIClick", clearButton, clearEventLog, false)
+    end
+
+    if isElement(copyLastButton) then
+        addEventHandler("onClientGUIClick", copyLastButton, copyLastEvent, false)
+    end
+
+    if isElement(copyButton) then
+        addEventHandler("onClientGUIClick", copyButton, copyAllEvents, false)
+    end
+
+    if isElement(closeButton) then
+        addEventHandler("onClientGUIClick", closeButton, function()
+            setDumperVisible(false)
+        end, false)
+    end
+
+    setDumperVisible(false)
+    return true
+end
+
+addEventHandler("onClientKey", root, function(button, press)
+    if not press then
+        return
+    end
+
+    if button == "F1" or button == "f1" then
+        cancelEvent()
+        toggleDumper()
+    elseif isDumperVisible() and (button == "escape" or button == "ESC") then
+        cancelEvent()
+        setDumperVisible(false)
+    end
+end)
+
+addEventHandler("onClientResourceStart", resourceRoot, function()
+    createNativeGui()
+end)
+
+-- Create the window immediately too. This also works when the file is loaded
+-- dynamically after onClientResourceStart has already fired.
+createNativeGui()
+
+if type(addDebugHook) == "function" then
+    local ok = pcall(
+        addDebugHook,
+        "preFunction",
+        eventDumper,
+        { "triggerServerEvent", "triggerLatentServerEvent" }
+    )
+    hookInstalled = ok
+end
+
+addEventHandler("onClientResourceStop", resourceRoot, function(stoppedResource)
+    if stoppedResource ~= getThisResource() then
+        return
+    end
+
+    if hookInstalled and type(removeDebugHook) == "function" then
+        pcall(
+            removeDebugHook,
+            "preFunction",
+            eventDumper,
+            { "triggerServerEvent", "triggerLatentServerEvent" }
+        )
+    end
+
+    showCursor(false)
+end)
+
