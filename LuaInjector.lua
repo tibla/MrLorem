@@ -1001,7 +1001,7 @@ end
 -- НАПОЛНЕНИЕ ВКЛАДКИ "ПРИКОЛЫ"
 ----------------------------------------------------------------
 local menuButtons = {
-    { name = "🎯 ESP Игроки (Вкл/Выкл)", fn = toggleESP, side = "left", key = "e" },
+    { name = "🎯 ESP Игроки (Вкл/Выкл)", fn = toggleESP, side = "left" },
     { name = "🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", fn = smartMarketGhost, side = "center" },
     { name = "🚀 Телепорт к метке (X)", fn = teleportToWaypoint, side = "right", key = "x" },
     { name = "🔧 Починить авто (H)", fn = repairVehicle, side = "left", key = "h" },
