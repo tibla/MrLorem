@@ -27,9 +27,11 @@ function fullCleanup()
     unbindKey("f9", "down")
     unbindKey("]", "down")
     unbindKey("lshift", "down")
+    unbindKey("f1", "down")
     
     -- 3. Очищаем активные таймеры
     if isTimer(autoTimer) then killTimer(autoTimer) end
+    if uiBootstrapTimer and isTimer(uiBootstrapTimer) then killTimer(uiBootstrapTimer) end
     for _, timer in pairs(_G.GH_Cache.timers) do
         if isTimer(timer) then killTimer(timer) end
     end
@@ -1140,210 +1142,334 @@ bindKey("]", "down", function()
 end)
 
 ----------------------------------------------------------------
--- ВКЛАДКА: DUMPER (ДАТЧИК СОБЫТИЙ)
+-- ВКЛАДКА: LUAINJECTOR (EVENTS DUMPER / MIRAGE IMGUI)
 ----------------------------------------------------------------
-local tabDumper = guiCreateTab("Dumper", tabPanel)
+local tabLuaInjector = guiCreateTab("LuaInjector", tabPanel)
 
-local eventLines = {}
-local eventMemo
-local infoLabel
-local clearButton
-local copyLastButton
-local copyButton
-local hookInstalled = false
+local isGUIOpen = false
+local selfResource = getResourceName(getThisResource())
+
 local LOG_MAX_LINES = 3000
+local RENDER_MAX_LINES = 900
+local eventLines = {}
+local block_dumper = false
+local uiRenderHookActive = false
+local uiBootstrapReady = false
+local uiBootstrapTimer = nil
 
-local ignoredEvents = {
-    ["CB:SetGroupHealthBuff"] = true,
-    ["onCaloriesUpdate"] = true,
-    ["lossHungryHealth"] = true,
-    ["OnPlayerWantGetPromoStatistics"] = true,
-    ["ChatStart"] = true,
-    ["ChatStop"] = true,
-    ["OnUpdateStaminaHandler"] = true,
-    ["Trade:Destroy"] = true,
-    ["loadVehicleDirtServer"] = true,
-    ["saveWindowsPositionServer"] = true,
-    ["afk:cancelByKey"] = true,
-    ["onPlayerAFKStateChange"] = true,
+local ui = {
+    width = 900,
+    height = 650,
+    posInitialized = false,
+    winX = nil,
+    winY = nil,
+    assetsReady = false,
+    keyButtonFont = "mirage_cyber_buttons",
 }
 
-local function quoteString(value)
-    return string.format("%q", tostring(value))
+local setHiddenFunctionCall
+local hiddenPcall
+
+local function debugLog(text)
+    if not mirageFunc then return end
+    mirageFunc("debugLog", tostring(text or ""))
 end
 
-local function serializeArgument(value, depth, visited)
-    depth = depth or 0
-    visited = visited or {}
+local function setupImGuiAssets(forceReload)
+    if forceReload then ui.assetsReady = false end
+    if ui.assetsReady then return end
 
-    if value == nil then return "nil" end
-    if value == localPlayer then return "localPlayer" end
-    if value == root then return "root" end
-    if value == resourceRoot then return "root" end
+    local base = mirageFunc("getLuaScriptsPath") or ""
+    local captionFont = joinPath and joinPath(base, "Cyber Blast.otf") or (base .. "Cyber Blast.otf")
 
-    if type(isElement) == "function" and isElement(value) then
-        local elementType = getElementType(value)
-        if elementType == "resource" or elementType == "root" then
-            return "root"
-        end
-        if elementType == "vehicle" and type(getPedOccupiedVehicle) == "function" and value == getPedOccupiedVehicle(localPlayer) then
-            return "localPlayer.vehicle"
-        end
-        if elementType == "player" and type(getPlayerName) == "function" then
-            return "getPlayerFromName(" .. quoteString(getPlayerName(value)) .. ")"
-        end
-        return "elem:" .. tostring(elementType or "unknown")
+    if type(mirageFunc) == "function" then
+        pcall(mirageFunc, "imgui.loadFont", captionFont, 36, ui.keyButtonFont)
+        pcall(mirageFunc, "imgui.themeDark")
+        pcall(mirageFunc, "imgui.setStyleRounding", 14.0, 10.0, 8.0, 10.0)
+        pcall(mirageFunc, "imgui.enable", true)
     end
 
-    local valueType = type(value)
-    if valueType == "string" then
-        return quoteString(value)
-    elseif valueType == "number" or valueType == "boolean" then
-        return tostring(value)
-    elseif valueType == "table" then
-        if depth >= 3 or visited[value] then return "{ ... }" end
-        visited[value] = true
-        local parts = {}
-        for index, item in ipairs(value) do
-            parts[#parts + 1] = serializeArgument(item, depth + 1, visited)
-        end
-        for key, item in pairs(value) do
-            if type(key) ~= "number" or key < 1 or key > #value or key % 1 ~= 0 then
-                parts[#parts + 1] = "[" .. serializeArgument(key, depth + 1, visited) .. "] = " .. serializeArgument(item, depth + 1, visited)
-            end
-        end
-        visited[value] = nil
-        return "{ " .. table.concat(parts, ", ") .. " }"
-    end
-
-    return tostring(value)
+    ui.assetsReady = true
 end
 
-local function buildEventCall(functionName, args)
-    local serialized = {}
-    for index = 1, #args do
-        serialized[index] = serializeArgument(args[index])
+local function setUiVisible(state)
+    isGUIOpen = state and true or false
+    if isGUIOpen then
+        ui.posInitialized = false
+        ui.winX = nil
+        ui.winY = nil
     end
-    return tostring(functionName) .. " ( " .. table.concat(serialized, ", ") .. " )"
+    if type(mirageFunc) == "function" then
+        pcall(mirageFunc, "blockScreen", isGUIOpen)
+        pcall(mirageFunc, "imgui.captureInput", isGUIOpen)
+        pcall(mirageFunc, "imgui.blockBinds", isGUIOpen)
+        pcall(mirageFunc, "imgui.forceCursor", isGUIOpen)
+        pcall(mirageFunc, "imgui.drawCursor", isGUIOpen)
+    end
+    if showCursor then showCursor(isGUIOpen, true) end
+    if showChat then showChat(not isGUIOpen) end
 end
 
-local function getEventLogText()
-    return table.concat(eventLines, "\n")
+setHiddenFunctionCall = function(state)
+    if not mirageFunc then return end
+    mirageFunc("hideFunctionCall", state and true or false)
 end
 
-local function updateDumperGui()
-    if not isElement(eventMemo) then return end
-    guiSetText(eventMemo, getEventLogText())
-    if isElement(infoLabel) then
-        guiSetText(infoLabel, "Events: " .. tostring(#eventLines))
-    end
-    if #eventLines > 0 then
-        guiMemoSetCaretIndex(eventMemo, #getEventLogText())
-    end
+hiddenPcall = function(func, ...)
+    setHiddenFunctionCall(true)
+    local results = { pcall(func, ...) }
+    setHiddenFunctionCall(false)
+    return unpack(results)
 end
+
+local function pushUiMessage(eventName, text)
+    if not triggerEvent then return end
+    hiddenPcall(triggerEvent, eventName, root, tostring(text or ""))
+end
+
+local function notifySuccess(text) pushUiMessage("ShowSuccess", text) end
+local function notifyError(text) pushUiMessage("ShowError", text) end
+local function notifyWarning(text) pushUiMessage("ShowWarning", text) end
 
 local function appendEventLine(text)
-    eventLines[#eventLines + 1] = tostring(text or "")
+    text = tostring(text or "")
+    eventLines[#eventLines + 1] = text
     if #eventLines > LOG_MAX_LINES then
         table.remove(eventLines, 1)
     end
-    updateDumperGui()
 end
 
-eventMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 180, "", false, tabDumper)
-if isElement(eventMemo) then
-    guiMemoSetReadOnly(eventMemo, true)
-    guiSetFont(eventMemo, "default-small")
+local function clearEventLog()
+    eventLines = {}
 end
 
-infoLabel = guiCreateLabel(12, windowH - 155, 250, 22, "Events: 0", false, tabDumper)
-if isElement(infoLabel) then
-    guiLabelSetVerticalAlign(infoLabel, "center")
+local function getEventLogText()
+    if #eventLines == 0 then return "" end
+    return table.concat(eventLines, "\n")
 end
 
-clearButton = guiCreateButton(windowW - 350, windowH - 160, 95, 30, "Clear", false, tabDumper)
-copyLastButton = guiCreateButton(windowW - 250, windowH - 160, 110, 30, "Copy Last", false, tabDumper)
-copyButton = guiCreateButton(windowW - 135, windowH - 160, 105, 30, "Copy All", false, tabDumper)
-
-if isElement(clearButton) then
-    addEventHandler("onClientGUIClick", clearButton, function()
-        eventLines = {}
-        updateDumperGui()
-    end, false)
+local function copyToClipboard(text, successMessage)
+    text = tostring(text or "")
+    if text == "" then
+        notifyWarning("Лог событий пуст")
+        return
+    end
+    if not setClipboard then
+        notifyError("Буфер обмена недоступен")
+        return
+    end
+    local ok, copied = hiddenPcall(setClipboard, text)
+    if ok and copied ~= false then
+        notifySuccess(tostring(successMessage or "Скопировано"))
+    else
+        notifyError("Не удалось скопировать в буфер обмена")
+    end
 end
 
-if isElement(copyLastButton) then
-    addEventHandler("onClientGUIClick", copyLastButton, function()
-        if type(setClipboard) == "function" and #eventLines > 0 then
-            pcall(setClipboard, eventLines[#eventLines])
-            outputChatBox("[Dumper] Последнее событие скопировано!", 0, 255, 0)
-        end
-    end, false)
+local function replaceResourceIdentifier(s)
+    s = s:gsub("elem:resource%x%x%x%x%x%x%x%x", "root")
+    s = s:gsub("elem:root%x%x%x%x%x%x%x%x", "root")
+    return s
 end
 
-if isElement(copyButton) then
-    addEventHandler("onClientGUIClick", copyButton, function()
-        if type(setClipboard) == "function" and #eventLines > 0 then
-            pcall(setClipboard, getEventLogText())
-            outputChatBox("[Dumper] Все события скопированы!", 0, 255, 0)
-        end
-    end, false)
+local function replacePlayerName(s, playerName)
+    local escapedPlayerName = playerName:gsub("([^%w])", "%%%1")
+    s = s:gsub("elem:player%[" .. escapedPlayerName .. "%]", "localPlayer")
+    return s
 end
 
-local function eventDumper(sourceResource, functionName, isAllowedByACL, luaFilename, luaLineNumber, ...)
+local function replaceAnyVehicleIdentifier(s)
+    return s:gsub("elem:vehicle%[%]%x%x%x%x%x%x%x%x", "localPlayer.vehicle")
+end
+
+local function bracesToParensOnce(s)
+    local first = s:find("{", 1, true)
+    if first then s = s:sub(1, first - 1) .. "(" .. s:sub(first + 1) end
+    local last = s:match(".*()}")
+    if last then s = s:sub(1, last - 1) .. ")" .. s:sub(last + 1) end
+    return s
+end
+
+local function buildEventDumpArgs(args)
+    local code_args = type(inspect) == "function" and inspect(args) or tostring(args)
+    code_args = replaceResourceIdentifier(code_args)
+    local my_elem = type(inspect) == "function" and inspect(localPlayer) or ""
+    local playerName = my_elem:match("elem:player%[(.-)%]")
+    if playerName and playerName ~= "" then
+        code_args = replacePlayerName(code_args, playerName)
+    end
+    code_args = replaceAnyVehicleIdentifier(code_args)
+    code_args = bracesToParensOnce(code_args)
+    return code_args
+end
+
+local function evDumper(sourceResource, functionName, isAllowedByACL, luaFilename, luaLineNumber, ...)
     local args = { ... }
-    local eventName = tostring(args[1])
-    local resourceName = sourceResource and getResourceName(sourceResource) or "unknown"
-    if resourceName == "nrp_player_head" or ignoredEvents[eventName] then
-        return
+    local resname = sourceResource and getResourceName(sourceResource)
+    
+    if not block_dumper then
+        local code_args = buildEventDumpArgs(args)
+        appendEventLine("[" .. tostring(resname) .. "] " .. tostring(functionName) .. " " .. code_args)
     end
-    appendEventLine(buildEventCall(functionName, args))
 end
 
-if type(addDebugHook) == "function" then
-    local ok = pcall(
-        addDebugHook,
-        "preFunction",
-        eventDumper,
-        { "triggerServerEvent", "triggerLatentServerEvent" }
-    )
-    hookInstalled = ok
-end
+local originalTriggerServerEvent = triggerServerEvent
+local originalTriggerLatentServerEvent = triggerLatentServerEvent
 
--- СКОРОСТЬ МАШИНЫ (Shift)
-_G.GH_Cache.binds = _G.GH_Cache.binds or {}
-if _G.GH_Cache.binds["speedBoostBind"] then
-    local old = _G.GH_Cache.binds["speedBoostBind"]
-    if old.key and old.state and old.fn then
-        unbindKey(old.key, old.state, old.fn)
+if originalTriggerServerEvent then
+    triggerServerEvent = function(...)
+        if not block_dumper then
+            local args = { ... }
+            local code_args = buildEventDumpArgs(args)
+            appendEventLine("[" .. tostring(selfResource) .. "] triggerServerEvent " .. code_args)
+        end
+        return originalTriggerServerEvent(...)
     end
-    _G.GH_Cache.binds["speedBoostBind"] = nil
 end
 
-local function speedBoost()
-    local veh = getPedOccupiedVehicle(localPlayer)
-    if not veh or getVehicleController(veh) ~= localPlayer then return end
-
-    local sx, sy, sz = getElementVelocity(veh)
-    setElementVelocity(veh, sx * 1.2, sy * 1.2, sz)
-end
-
-bindKey("lshift", "down", speedBoost)
-_G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
-
-addEventHandler("onClientResourceStop", resourceRoot, function(stoppedResource)
-    if stoppedResource ~= getThisResource() then
-        return
+if originalTriggerLatentServerEvent then
+    triggerLatentServerEvent = function(...)
+        if not block_dumper then
+            local args = { ... }
+            local code_args = buildEventDumpArgs(args)
+            appendEventLine("[" .. tostring(selfResource) .. "] triggerLatentServerEvent " .. code_args)
+        end
+        return originalTriggerLatentServerEvent(...)
     end
+end
 
-    if hookInstalled and type(removeDebugHook) == "function" then
-        pcall(
-            removeDebugHook,
-            "preFunction",
-            eventDumper,
-            { "triggerServerEvent", "triggerLatentServerEvent" }
-        )
+local function pushEventLineColor(line)
+    if not mirageFunc then return end
+    if line:find("triggerServerEvent", 1, true) then
+        mirageFunc("imgui.pushStyleColor", 0, 250, 225, 120, 255)
+    elseif line:find("localPlayer", 1, true) then
+        mirageFunc("imgui.pushStyleColor", 0, 152, 230, 130, 255)
+    elseif line:find("root", 1, true) then
+        mirageFunc("imgui.pushStyleColor", 0, 132, 212, 255, 255)
+    else
+        mirageFunc("imgui.pushStyleColor", 0, 240, 200, 200, 255)
+    end
+end
+
+local function popEventLineColor()
+    if mirageFunc then
+        mirageFunc("imgui.popStyleColor", 1)
+    end
+end
+
+local function renderEventsUi()
+    if type(mirageFunc) ~= "function" then return end
+    local renderAllowed = mirageFunc("isImguiHotkeyRenderAllowed")
+    if not renderAllowed or not isGUIOpen or not mirageFunc("imgui.isReady") then return end
+
+    local sx, sy = guiGetScreenSize()
+    ui.width = math.max(900, math.floor(sx * 0.60))
+    ui.height = math.max(650, math.floor(sy * 0.70))
+
+    local defaultX = math.floor((sx - ui.width) * 0.5)
+    local defaultY = math.floor((sy - ui.height) * 0.5)
+
+    ui.winX = mirageFunc("imgui.getFloat", "wnd_events_dumper#x", ui.winX or defaultX) or (ui.winX or defaultX)
+    ui.winY = mirageFunc("imgui.getFloat", "wnd_events_dumper#y", ui.winY or defaultY) or (ui.winY or defaultY)
+
+    if not ui.posInitialized then
+        mirageFunc("imgui.setNextWindowPos", math.floor(ui.winX), math.floor(ui.winY), 0)
+        ui.posInitialized = true
+    end
+    mirageFunc("imgui.setNextWindowSize", ui.width, ui.height, 0)
+
+    local opened = mirageFunc("imgui.begin", "Events Dumper", true, 0, "wnd_events_dumper")
+    if opened then
+        local logW = ui.width - 30
+        local logH = ui.height - 130
+
+        mirageFunc("imgui.beginChild", "events_log_host", logW, logH, true, 16384, "events_log_host")
+        local first = math.max(1, #eventLines - RENDER_MAX_LINES)
+        for i = first, #eventLines do
+            pushEventLineColor(eventLines[i])
+            mirageFunc("imgui.text", eventLines[i])
+            popEventLineColor()
+        end
+        mirageFunc("imgui.endChild")
+
+        mirageFunc("imgui.setCursorPos", 14, ui.height - 55)
+        if mirageFunc("imgui.button", "Копировать последний", 180, 35, "ev_btn_copy_last") then
+            copyToClipboard(eventLines[#eventLines], "Скопирован последний евент")
+        end
+        mirageFunc("imgui.sameLine")
+        if mirageFunc("imgui.button", "Копировать всё", 160, 35, "ev_btn_copy_all") then
+            copyToClipboard(getEventLogText(), "Лог евентов скопирован")
+        end
+        mirageFunc("imgui.sameLine")
+        if mirageFunc("imgui.button", "Очистить лог", 140, 35, "ev_btn_clear") then
+            clearEventLog()
+        end
+    else
+        isGUIOpen = false
+        setUiVisible(false)
+    end
+    mirageFunc("imgui.end")
+end
+
+local function ToggleGUI()
+    isGUIOpen = not isGUIOpen
+    setUiVisible(isGUIOpen)
+end
+
+_G.MirageToggleInjectorMenu = ToggleGUI
+
+local function bootstrapUi()
+    if uiBootstrapReady then return true end
+    if type(mirageFunc) ~= "function" then return false end
+
+    local ok = pcall(function()
+        setupImGuiAssets()
+        setUiVisible(false)
+
+        mirageFunc("hideFunctionCall", true)
+        mirageFunc("setDbgHook", "preFunction", evDumper, { "triggerServerEvent", "triggerLatentServerEvent" })
+        mirageFunc("hideFunctionCall", false)
+
+        if not uiRenderHookActive then
+            addEventHandler("onClientRender", root, renderEventsUi)
+            uiRenderHookActive = true
+        end
+    end)
+
+    if ok then
+        uiBootstrapReady = true
+        return true
+    end
+    return false
+end
+
+if not bootstrapUi() then
+    uiBootstrapTimer = setTimer(function()
+        if bootstrapUi() then
+            if isTimer(sourceTimer) then killTimer(sourceTimer) end
+        end
+    end, 1000, 0)
+end
+
+addEventHandler("onClientKey", root, function(button, press)
+    if button == "f1" and press then
+        ToggleGUI()
+        cancelEvent()
+    end
+    if isGUIOpen and press and button == "escape" then
+        cancelEvent()
+        isGUIOpen = false
+        setUiVisible(false)
     end
 end)
+
+-- Создаем элементы управления внутри вкладки LuaInjector
+local lblInfoLua = guiCreateLabel(20, 20, 500, 30, "Инжектор / Дампер событий (F1 - управление ImGui окном)", false, tabLuaInjector)
+guiSetFont(lblInfoLua, "default-bold")
+
+local btnToggleGui = guiCreateButton(20, 60, 250, 40, "Открыть/Закрыть Dumper (F1)", false, tabLuaInjector)
+addEventHandler("onClientGUIClick", btnToggleGui, function()
+    ToggleGUI()
+end, false)
 
 outputChatBox("[Engine] #00FF00Всё успешно загружено!", 255, 255, 255, true)
