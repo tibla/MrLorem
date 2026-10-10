@@ -1138,109 +1138,54 @@ bindKey("]", "down", function()
 end)
 
 ----------------------------------------------------------------
--- КАТЕГОРИЯ: DUMPER
+-- DUMPER FORMATTER БЕЗ GUI
+-- Использует уже существующую функцию appendDumperLine()
 ----------------------------------------------------------------
 
-local tabDumper = guiCreateTab("Dumper", tabPanel)
+local DUMPER_SHOW_RESOURCE = false
 
-local dumperMemo = guiCreateMemo(
-    10,
-    10,
-    windowW - 40,
-    windowH - 120,
-    "",
-    false,
-    tabDumper
-)
-
-guiMemoSetReadOnly(dumperMemo, true)
-
-local dumperClearBtn = guiCreateButton(
-    10,
-    windowH - 105,
-    120,
-    35,
-    "Clear",
-    false,
-    tabDumper
-)
-
-local dumperCopyLastBtn = guiCreateButton(
-    140,
-    windowH - 105,
-    120,
-    35,
-    "Copy Last",
-    false,
-    tabDumper
-)
-
-local dumperCopyAllBtn = guiCreateButton(
-    270,
-    windowH - 105,
-    120,
-    35,
-    "Copy All",
-    false,
-    tabDumper
-)
-
-local dumperEventLines = {}
-local DUMP_MAX_LINES = 1000
-
-local IGNORED_RESOURCES = {
+local DUMPER_IGNORED_RESOURCES = {
     ["nrp_player_head"] = true
 }
 
 
-local function updateDumperGui()
-    if not isElement(dumperMemo) then
-        return
-    end
-
-    guiSetText(dumperMemo, table.concat(dumperEventLines, "\n"))
-end
-
-
-local function appendDumperLine(text)
-    dumperEventLines[#dumperEventLines + 1] = tostring(text or "")
-
-    if #dumperEventLines > DUMP_MAX_LINES then
-        table.remove(dumperEventLines, 1)
-    end
-
-    updateDumperGui()
-end
-
-
-local function formatElement(element, sourceResource)
-    if not isElement(element) then
-        return nil
-    end
-
-    if element == localPlayer then
+local function dumperFormatElement(value, sourceResource)
+    if value == localPlayer then
         return "localPlayer"
     end
 
-    if element == root then
+    if value == root then
         return "root"
     end
 
-    if sourceResource then
+    if sourceResource and isElement(sourceResource) then
         local sourceRoot = getResourceRootElement(sourceResource)
 
-        if element == sourceRoot then
+        if value == sourceRoot then
             return "resourceRoot"
         end
     end
 
-    return "element:" .. tostring(getElementType(element))
+    if isElement(value) then
+        return "element:" .. tostring(getElementType(value))
+    end
+
+    return nil
 end
 
 
-local function formatValue(value, sourceResource, depth, visited)
+local function dumperFormatValue(value, sourceResource, depth, visited)
     depth = depth or 0
     visited = visited or {}
+
+    local elementName = dumperFormatElement(
+        value,
+        sourceResource
+    )
+
+    if elementName then
+        return elementName
+    end
 
     local valueType = type(value)
 
@@ -1248,14 +1193,6 @@ local function formatValue(value, sourceResource, depth, visited)
         return string.format("%q", value)
 
     elseif valueType == "number" then
-        if value ~= value then
-            return "nan"
-        end
-
-        if value == math.huge then
-            return "math.huge"
-        end
-
         return tostring(value)
 
     elseif valueType == "boolean" then
@@ -1263,13 +1200,8 @@ local function formatValue(value, sourceResource, depth, visited)
 
     elseif valueType == "nil" then
         return "nil"
-    end
 
-    if isElement(value) then
-        return formatElement(value, sourceResource)
-    end
-
-    if valueType == "table" then
+    elseif valueType == "table" then
         if depth >= 2 then
             return "{...}"
         end
@@ -1292,8 +1224,20 @@ local function formatValue(value, sourceResource, depth, visited)
             end
 
             result[#result + 1] =
-                "[" .. formatValue(key, sourceResource, depth + 1, visited) .. "] = " ..
-                formatValue(item, sourceResource, depth + 1, visited)
+                "[" ..
+                dumperFormatValue(
+                    key,
+                    sourceResource,
+                    depth + 1,
+                    visited
+                ) ..
+                "] = " ..
+                dumperFormatValue(
+                    item,
+                    sourceResource,
+                    depth + 1,
+                    visited
+                )
         end
 
         visited[value] = nil
@@ -1305,7 +1249,7 @@ local function formatValue(value, sourceResource, depth, visited)
 end
 
 
-local function eventDumperHook(
+local function dumperPrettyHook(
     sourceResource,
     functionName,
     isAllowedByACL,
@@ -1319,97 +1263,42 @@ local function eventDumperHook(
         resourceName = getResourceName(sourceResource)
     end
 
-    if IGNORED_RESOURCES[resourceName] then
+    if DUMPER_IGNORED_RESOURCES[resourceName] then
         return
     end
 
     local args = { ... }
     local formattedArgs = {}
 
-    for index = 1, #args do
-        formattedArgs[index] =
-            formatValue(args[index], sourceResource, 0, {})
+    for i = 1, #args do
+        formattedArgs[i] =
+            dumperFormatValue(
+                args[i],
+                sourceResource,
+                0,
+                {}
+            )
     end
 
     local line = string.format(
-        "[%s] %s ( %s )",
-        resourceName,
+        "%s ( %s )",
         tostring(functionName),
         table.concat(formattedArgs, ", ")
     )
 
+    if DUMPER_SHOW_RESOURCE then
+        line = "[" .. resourceName .. "] " .. line
+    end
+
     appendDumperLine(line)
 end
-
-
-addEventHandler("onClientGUIClick", dumperClearBtn, function()
-    dumperEventLines = {}
-    updateDumperGui()
-
-    outputChatBox(
-        "[Dumper] Логи очищены.",
-        255,
-        255,
-        0
-    )
-end, false)
-
-
-addEventHandler("onClientGUIClick", dumperCopyLastBtn, function()
-    if #dumperEventLines == 0 then
-        outputChatBox(
-            "[Dumper] Нет логов для копирования.",
-            255,
-            100,
-            100
-        )
-
-        return
-    end
-
-    if type(setClipboard) == "function" then
-        setClipboard(dumperEventLines[#dumperEventLines])
-
-        outputChatBox(
-            "[Dumper] Последний лог скопирован.",
-            0,
-            255,
-            0
-        )
-    end
-end, false)
-
-
-addEventHandler("onClientGUIClick", dumperCopyAllBtn, function()
-    if #dumperEventLines == 0 then
-        outputChatBox(
-            "[Dumper] Нет логов для копирования.",
-            255,
-            100,
-            100
-        )
-
-        return
-    end
-
-    if type(setClipboard) == "function" then
-        setClipboard(table.concat(dumperEventLines, "\n"))
-
-        outputChatBox(
-            "[Dumper] Все логи скопированы.",
-            0,
-            255,
-            0
-        )
-    end
-end, false)
 
 
 if type(addDebugHook) == "function" then
     local success, errorMessage = pcall(
         addDebugHook,
         "preFunction",
-        eventDumperHook,
+        dumperPrettyHook,
         {
             "triggerServerEvent",
             "triggerLatentServerEvent"
@@ -1418,26 +1307,20 @@ if type(addDebugHook) == "function" then
 
     if success then
         outputChatBox(
-            "[Dumper] Debug hook успешно включён.",
+            "[Dumper] Форматированный hook включён.",
             0,
             255,
             0
         )
     else
         outputChatBox(
-            "[Dumper] Ошибка включения hook: " .. tostring(errorMessage),
+            "[Dumper] Ошибка hook: " ..
+            tostring(errorMessage),
             255,
             0,
             0
         )
     end
-else
-    outputChatBox(
-        "[Dumper] addDebugHook недоступен в этой сборке MTA.",
-        255,
-            0,
-            0
-    )
 end
 
 -- ==========================================
