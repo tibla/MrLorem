@@ -1200,43 +1200,128 @@ if type(addDebugHook) == "function" then
     pcall(addDebugHook, "preFunction", eventDumperHook, { "triggerServerEvent", "triggerLatentServerEvent" })
 end
 
-----------------------------------------------------------------
--- КАТЕГОРИЯ (ВКЛАДКА): ИНЖЕКТОР (С выгрузкой из GitHub)
-----------------------------------------------------------------
-local tabLua = guiCreateTab("Инжектор", tabPanel)
-local luaMemo = guiCreateMemo(10, 10, windowW - 40, windowH - 180, "-- Впишите сюда ваш код", false, tabLua)
+-- ==========================================
+-- ВКЛАДКА LUA-КОДА
+-- Требуются: tabPanel, windowW, windowH
+-- ==========================================
 
-local btnRunLua = guiCreateButton(10, windowH - 155, 200, 35, "Запустить код", false, tabLua)
-local btnClearLua = guiCreateButton(220, windowH - 155, 200, 35, "Очистить поле", false, tabLua)
-local btnReloadRemote = guiCreateButton(10, windowH - 110, 410, 45, "🔄 ВЫГРУЗИТЬ И ОБНОВИТЬ С GITHUB", false, tabLua)
+local tabLua = guiCreateTab("Lua-код", tabPanel)
 
-addEventHandler("onClientGUIClick", btnRunLua, function()
-    local func, err = loadstring(guiGetText(luaMemo))
-    if func then pcall(func) else outputChatBox("[Error] "..tostring(err), 255, 0, 0) end
+local luaMemo = guiCreateMemo(
+    10,
+    10,
+    windowW - 40,
+    windowH - 180,
+    "-- Вставьте Lua-код для проверки",
+    false,
+    tabLua
+)
+
+local btnCheckLua = guiCreateButton(
+    10,
+    windowH - 155,
+    200,
+    35,
+    "Проверить код",
+    false,
+    tabLua
+)
+
+local btnClearLua = guiCreateButton(
+    220,
+    windowH - 155,
+    200,
+    35,
+    "Очистить поле",
+    false,
+    tabLua
+)
+
+local btnLoadGithub = guiCreateButton(
+    10,
+    windowH - 110,
+    410,
+    45,
+    "Загрузить код с GitHub",
+    false,
+    tabLua
+)
+
+local GITHUB_URL =
+    "https://raw.githubusercontent.com/tibla/MrLorem/refs/heads/main/LuaInjector.lua"
+
+
+local function showError(message)
+    outputChatBox("[Lua] Ошибка: " .. tostring(message), 255, 70, 70)
+end
+
+
+local function showSuccess(message)
+    outputChatBox("[Lua] " .. tostring(message), 0, 255, 100)
+end
+
+
+-- Проверка синтаксиса без выполнения кода
+addEventHandler("onClientGUIClick", btnCheckLua, function()
+    local source = guiGetText(luaMemo) or ""
+
+    if source == "" or source:match("^%s*$") then
+        showError("поле пустое")
+        return
+    end
+
+    local compiledFunction, compileError = loadstring(source)
+
+    if not compiledFunction then
+        showError("синтаксическая ошибка: " .. tostring(compileError))
+        return
+    end
+
+    showSuccess("синтаксис корректен. Код не выполнялся.")
 end, false)
 
-addEventHandler("onClientGUIClick", btnClearLua, function() 
-    guiSetText(luaMemo, "") 
-    outputChatBox("Поле очищено", 255, 255, 0)
+
+-- Очистка поля
+addEventHandler("onClientGUIClick", btnClearLua, function()
+    guiSetText(luaMemo, "")
+    showSuccess("поле очищено")
 end, false)
 
-addEventHandler("onClientGUIClick", btnReloadRemote, function()
-    fetchRemote("https://raw.githubusercontent.com/tibla/MrLorem/refs/heads/main/LuaInjector.lua", function(data, err)
-        if err == 0 then
-            fullCleanup()
-            local func, cErr = loadstring(data)
-            if func then 
-                pcall(func) 
-                outputChatBox("Обновлено из GitHub!", 0, 255, 0)
-            else
-                outputChatBox("Ошибка компиляции: "..tostring(cErr))
-            end
-        else
-            outputChatBox("Ошибка загрузки: "..tostring(err))
+
+-- Загрузка исходника с GitHub без выполнения
+addEventHandler("onClientGUIClick", btnLoadGithub, function()
+    guiSetEnabled(btnLoadGithub, false)
+    guiSetText(btnLoadGithub, "Загрузка...")
+
+    fetchRemote(GITHUB_URL, function(data, errorCode)
+        guiSetEnabled(btnLoadGithub, true)
+        guiSetText(btnLoadGithub, "Загрузить код с GitHub")
+
+        if errorCode ~= 0 then
+            showError("ошибка загрузки с GitHub: " .. tostring(errorCode))
+            return
         end
+
+        if type(data) ~= "string" or data == "" then
+            showError("GitHub вернул пустой ответ")
+            return
+        end
+
+        guiSetText(luaMemo, data)
+
+        local _, compileError = loadstring(data)
+
+        if compileError then
+            showError("загруженный код содержит ошибку: " .. tostring(compileError))
+            return
+        end
+
+        showSuccess("код загружен и синтаксически проверен")
     end)
 end, false)
 
+
+showSuccess("вкладка Lua-кода загружена")
 -- СКОРОСТЬ МАШИНЫ (Shift)
 _G.GH_Cache.binds = _G.GH_Cache.binds or {}
 if _G.GH_Cache.binds["speedBoostBind"] then
