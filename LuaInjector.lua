@@ -1038,6 +1038,380 @@ local function addJobButton(name, fn, side, defaultKey)
     addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
 end
 
+-- Справочник профессий из job_configs.lua.
+-- Левая кнопка пытается открыть/запустить работу, правая увольняет.
+-- Уровень указан только там, где он явно проверяется в конфигурации работы.
+local jobDirectory = {
+    {
+        name = "Шахтёр",
+        level = "—",
+        location = "Серьога; 1223.15, -1980.57, 87.21",
+        start = function()
+            triggerEvent("Jobs:MineWindow", localPlayer)
+        end,
+        stop = function()
+            triggerServerEvent("Miner:StopJob", localPlayer)
+        end,
+    },
+    {
+        name = "Glovo",
+        level = "3+",
+        location = "Андрій; 692.94, 2287.03, 21.62",
+        start = function()
+            triggerServerEvent("Jobs:GlovoInvite", localPlayer, 1)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:GlovoUval", localPlayer)
+        end,
+    },
+    {
+        name = "Строитель",
+        level = "—",
+        location = "Владислав; 1047.73, 2627.84, 23.02",
+        start = function()
+            triggerServerEvent("Builder:WantStartJob", resourceRoot, 1)
+        end,
+        stop = function()
+            triggerServerEvent("Builder:WantStopJob", resourceRoot)
+        end,
+    },
+    {
+        name = "Перевозчик (стройка)",
+        level = "—",
+        location = "Владислав; 1047.73, 2627.84, 23.02",
+        start = function()
+            triggerServerEvent("Builder:WantStartJob", resourceRoot, 2)
+        end,
+        stop = function()
+            triggerServerEvent("Builder:WantStopJob", resourceRoot)
+        end,
+    },
+    {
+        name = "Бетономешалка",
+        level = "—",
+        location = "Владислав; 1047.73, 2627.84, 23.02",
+        start = function()
+            triggerServerEvent("Builder:WantStartJob", resourceRoot, 3)
+        end,
+        stop = function()
+            triggerServerEvent("Builder:WantStopJob", resourceRoot)
+        end,
+    },
+    {
+        name = "Екскаватор",
+        level = "—",
+        location = "Владислав; 1047.73, 2627.84, 23.02",
+        start = function()
+            triggerServerEvent("Builder:WantStartJob", resourceRoot, 4)
+        end,
+        stop = function()
+            triggerServerEvent("Builder:WantStopJob", resourceRoot)
+        end,
+    },
+    {
+        name = "Таксист (Дніпро)",
+        level = "4+",
+        location = "Дмитро; 66.69, -2592.13, 18.15",
+        start = function()
+            triggerServerEvent("Taxi:StartJob", localPlayer, "dnepr")
+        end,
+        stop = function()
+            triggerServerEvent("Taxi:StopJob", localPlayer)
+        end,
+    },
+    {
+        name = "Таксист (Харків)",
+        level = "4+",
+        location = "Валера; 2369.89, 413.65, 2.05",
+        start = function()
+            triggerServerEvent("Taxi:StartJob", localPlayer, "kharkiv")
+        end,
+        stop = function()
+            triggerServerEvent("Taxi:StopJob", localPlayer)
+        end,
+    },
+    {
+        name = "Автомеханик (база 1)",
+        level = "—",
+        location = "Санчо; 1097.70, 1924.45, 21.45",
+        start = function()
+            triggerServerEvent("Jobs:TowTrucker", localPlayer, 1)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:TowTruckerUval", localPlayer)
+        end,
+    },
+    {
+        name = "Автомеханик (база 2)",
+        level = "—",
+        location = "Санчо; 131.25, -2590.68, 18.14",
+        start = function()
+            triggerServerEvent("Jobs:TowTrucker", localPlayer, 2)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:TowTruckerUval", localPlayer)
+        end,
+    },
+    {
+        name = "Водитель автобуса (Днепр 1)",
+        level = "—",
+        location = "Антон; -886.40, -2554.08, 18.09",
+        start = function()
+            triggerServerEvent("Jobs:BusInvite", localPlayer, 1)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:BusUval", localPlayer)
+        end,
+    },
+    {
+        name = "Водитель автобуса (Днепр 2)",
+        level = "—",
+        location = "Антон; -1003.59, -2499.98, 18.09",
+        start = function()
+            triggerServerEvent("Jobs:BusInvite", localPlayer, 1)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:BusUval", localPlayer)
+        end,
+    },
+    {
+        name = "Снегоуборочная служба",
+        level = "—",
+        location = "Наталія; -1089.97, 2429.06, 19.97",
+        start = function()
+            triggerEvent("jobs:ui_hcs", localPlayer)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:StopHcs", localPlayer, 1)
+        end,
+    },
+    {
+        name = "Газовая служба",
+        level = "—",
+        location = "Наталія; -1089.97, 2429.06, 19.97",
+        start = function()
+            triggerEvent("jobs:ui_hcs", localPlayer)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:StopHcs", localPlayer, 1)
+        end,
+    },
+    {
+        name = "Пилот",
+        level = "—",
+        location = "Григорій; 2301.36, 2585.74, 21.47",
+        start = function()
+            triggerServerEvent("Jobs:PilotStart", localPlayer)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:PilotStop", localPlayer)
+        end,
+    },
+    {
+        name = "Водитель автобуса (Киев)",
+        level = "—",
+        location = "Володя; -935.96, 2447.07, 17.81",
+        start = function()
+            triggerServerEvent("Jobs:BusInvite", localPlayer, 2)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:BusUval", localPlayer)
+        end,
+    },
+    {
+        name = "Водитель катера",
+        level = "—",
+        location = "Христина; -514.35, -2816.80, 1.74",
+        start = function()
+            triggerServerEvent("Jobs:SailorStart", localPlayer)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:SailorStop", localPlayer)
+        end,
+    },
+    {
+        name = "Водитель трамвая",
+        level = "ліцензія T",
+        location = "Андрій; 2767.58, -177.23, 7.38",
+        start = function()
+            triggerServerEvent("Jobs:InviteTram", localPlayer)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:DestroyTram", localPlayer)
+        end,
+    },
+    {
+        name = "Таксист (Киев)",
+        level = "4+",
+        location = "Дмитро; -1445.69, 1446.60, 17.84",
+        start = function()
+            triggerServerEvent("Taxi:StartJob", localPlayer, "kyiv")
+        end,
+        stop = function()
+            triggerServerEvent("Taxi:StopJob", localPlayer)
+        end,
+    },
+    {
+        name = "Снегоочиститель",
+        level = "—",
+        location = "Сергій; 2573.13, -334.62, 7.26",
+        start = function()
+            triggerServerEvent("SnowBlower.StartJob", localPlayer)
+        end,
+        stop = function()
+            triggerServerEvent("SnowBlower.StopJob", localPlayer)
+        end,
+    },
+    {
+        name = "Водитель автобуса (Харьков)",
+        level = "—",
+        location = "Антон; 2788.96, 416.16, 7.14",
+        start = function()
+            triggerServerEvent("Jobs:BusInvite", localPlayer, 3)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:BusUval", localPlayer)
+        end,
+    },
+    {
+        name = "Заготовка древесины",
+        level = "1",
+        location = "Владислав; -1824.12, -1086.75, 4.67",
+        start = function()
+            outputChatBox("Выберите специализацию лесоруба у NPC Владислава.", 255, 220, 0)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:ForestStop", resourceRoot)
+        end,
+    },
+    {
+        name = "Погрузка древесины",
+        level = "5",
+        location = "Владислав; -1824.12, -1086.75, 4.67",
+        start = function()
+            outputChatBox("Выберите специализацию лесоруба у NPC Владислава.", 255, 220, 0)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:ForestStop", resourceRoot)
+        end,
+    },
+    {
+        name = "Перевозка древесины",
+        level = "10",
+        location = "Владислав; -1824.12, -1086.75, 4.67",
+        start = function()
+            outputChatBox("Выберите специализацию лесоруба у NPC Владислава.", 255, 220, 0)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:ForestStop", resourceRoot)
+        end,
+    },
+    {
+        name = "Дайвер",
+        level = "—",
+        location = "Місцевий дайвер; 216.15, 1599.70, 3.71",
+        start = function()
+            triggerServerEvent("Diving:StartJob", resourceRoot)
+        end,
+        stop = function()
+            triggerServerEvent("Diving:StopJob", resourceRoot)
+        end,
+    },
+    {
+        name = "Грузчик (почта)",
+        level = "—",
+        location = "HR; інтер'єр 1998, 310.17, 1.13",
+        start = function()
+            triggerServerEvent("Jobs:PostInstall", resourceRoot, 1)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:PostStop", resourceRoot)
+        end,
+    },
+    {
+        name = "Фасовщик (почта)",
+        level = "—",
+        location = "HR; інтер'єр 1998, 310.17, 1.13",
+        start = function()
+            triggerServerEvent("Jobs:PostInstall", resourceRoot, 2)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:PostStop", resourceRoot)
+        end,
+    },
+    {
+        name = "Перевозчик (почта)",
+        level = "—",
+        location = "HR; інтер'єр 1998, 310.17, 1.13",
+        start = function()
+            triggerServerEvent("Jobs:PostInstall", resourceRoot, 3)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:PostStop", resourceRoot)
+        end,
+    },
+    {
+        name = "Работник железной дороги",
+        level = "—",
+        location = "Олександр; -821.95, -2380.63, 17.82",
+        start = function()
+            triggerServerEvent("Jobs:TrainInsert", resourceRoot)
+        end,
+        stop = function()
+            triggerServerEvent("Jobs:TrainRemove", resourceRoot)
+        end,
+    },
+}
+
+local function addJobDirectoryRow(job, rowY)
+    local jobButton = guiCreateButton(
+        10,
+        rowY,
+        180,
+        38,
+        string.format("%s (лвл %s)", job.name, job.level),
+        false,
+        scrollJobs
+    )
+
+    local quitButton = guiCreateButton(
+        200,
+        rowY,
+        95,
+        38,
+        "Уволиться",
+        false,
+        scrollJobs
+    )
+
+    local infoLabel = guiCreateLabel(
+        305,
+        rowY,
+        395,
+        38,
+        "Место: " .. job.location,
+        false,
+        scrollJobs
+    )
+    guiLabelSetHorizontalAlign(infoLabel, "left", true)
+    guiLabelSetVerticalAlign(infoLabel, "center")
+
+    addEventHandler("onClientGUIClick", jobButton, function()
+        if waitingForBind then return end
+        if job.start then
+            job.start()
+        end
+    end, false)
+
+    addEventHandler("onClientGUIClick", quitButton, function()
+        if waitingForBind then return end
+        if job.stop then
+            job.stop()
+            outputChatBox("Запрос на увольнение отправлен.", 255, 220, 0)
+        end
+    end, false)
+end
+
 function repeirm()
     setTimer(function()
         outputChatBox("РЕМКА ЧЕЛА ПОШЛА", 0, 255, 0)
@@ -1114,6 +1488,29 @@ for _, item in ipairs(jobButtons) do
     addJobButton(item.name, item.fn, item.side, item.key)
 end
 
+local jobDirectoryY = math.max(
+    colYJobs.left,
+    colYJobs.center,
+    colYJobs.right
+) + 8
+
+local jobDirectoryTitle = guiCreateLabel(
+    10,
+    jobDirectoryY,
+    690,
+    25,
+    "Все работы: название (лвл), кнопка увольнения и место",
+    false,
+    scrollJobs
+)
+guiSetFont(jobDirectoryTitle, "default-bold-small")
+jobDirectoryY = jobDirectoryY + 30
+
+for _, job in ipairs(jobDirectory) do
+    addJobDirectoryRow(job, jobDirectoryY)
+    jobDirectoryY = jobDirectoryY + 48
+end
+
 bindKey("]", "down", function() 
     if isTimer(autoTimer) then 
         killTimer(autoTimer) 
@@ -1168,5 +1565,4 @@ bindKey("lshift", "down", speedBoost)
 _G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
 
 outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
-
 
