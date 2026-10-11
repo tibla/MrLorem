@@ -86,7 +86,7 @@ _G.GH_Cache.keyHandler = keyBindInterceptor
 -- ИНТЕРФЕЙС
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
-local windowW, windowH = 1000, 700
+local windowW, windowH = 900, 640
 local x = math.max(20, (screenW - windowW) / 2)
 local y = math.max(20, (screenH - windowH) / 2)
 
@@ -182,8 +182,8 @@ local colY = {
 
 local columnX = {
     left = 15,
-    center = 330,
-    right = 645
+    center = 300,
+    right = 585
 }
 
 
@@ -203,7 +203,7 @@ local function addActionButton(
     local actionButton = guiCreateButton(
         posX,
         posY,
-        245,
+        220,
         36,
         name,
         false,
@@ -211,9 +211,9 @@ local function addActionButton(
     )
 
     local bindButton = guiCreateButton(
-        posX + 250,
+        posX + 225,
         posY,
-        45,
+        40,
         36,
         defaultKey and string.upper(defaultKey) or "?",
         false,
@@ -919,15 +919,15 @@ local editPlayerSpeed = guiCreateEdit(250, 97, 120, 28, tostring(flyConfig.playe
 guiCreateLabel(20, 140, 220, 25, "Ускорение Shift:", false, tabFlySettings)
 local editPlayerBoost = guiCreateEdit(250, 137, 120, 28, tostring(flyConfig.playerBoost), false, tabFlySettings)
 
-local flyCarTitle = guiCreateLabel(440, 70, 320, 18, "МАШИНА", false, tabFlySettings)
+local flyCarTitle = guiCreateLabel(400, 70, 320, 18, "МАШИНА", false, tabFlySettings)
 guiSetFont(flyCarTitle, "default-bold-small")
 guiLabelSetColor(flyCarTitle, 167, 120, 255)
 
-guiCreateLabel(440, 100, 220, 25, "Скорость fly машины:", false, tabFlySettings)
-local editCarSpeed = guiCreateEdit(670, 97, 120, 28, tostring(flyConfig.carSpeed), false, tabFlySettings)
+guiCreateLabel(400, 100, 190, 25, "Скорость fly машины:", false, tabFlySettings)
+local editCarSpeed = guiCreateEdit(610, 97, 110, 28, tostring(flyConfig.carSpeed), false, tabFlySettings)
 
-guiCreateLabel(440, 140, 220, 25, "Ускорение машины на Shift:", false, tabFlySettings)
-local editCarBoost = guiCreateEdit(670, 137, 120, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
+guiCreateLabel(400, 140, 190, 25, "Ускорение машины на Shift:", false, tabFlySettings)
+local editCarBoost = guiCreateEdit(610, 137, 110, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
 
 local flyOptionsTitle = guiCreateLabel(18, 205, 320, 18, "ДОПОЛНИТЕЛЬНЫЕ ОПЦИИ", false, tabFlySettings)
 guiSetFont(flyOptionsTitle, "default-bold-small")
@@ -1124,6 +1124,59 @@ guiLabelSetColor(jobsHint, 140, 160, 185)
 
 local scrollJobs = guiCreateScrollPane(10, 38, windowW - 44, windowH - 118, false, tabJobs)
 local colYJobs = { left = 10, center = 10, right = 10 }
+
+-- В некоторых сборках MTA колесо не прокручивает CEGUI ScrollPane автоматически.
+-- Поэтому добавляем ручную прокрутку активной вкладки.
+local guiScrollFallback = {}
+
+local function getGuiScrollPosition(scrollPane)
+    if type(guiScrollPaneGetVerticalScrollPosition) == "function" then
+        return guiScrollPaneGetVerticalScrollPosition(scrollPane) or 0
+    end
+
+    return guiScrollFallback[scrollPane] or 0
+end
+
+local function handleGuiScroll(button, press)
+    if not press or not guiGetVisible(mainWin) then
+        return
+    end
+
+    if type(guiScrollPaneSetVerticalScrollPosition) ~= "function" then
+        return
+    end
+
+    local selectedTab = guiGetSelectedTab(tabPanel)
+    local scrollPane
+
+    if selectedTab == tabFun then
+        scrollPane = scrollFun
+    elseif selectedTab == tabJobs then
+        scrollPane = scrollJobs
+    end
+
+    if not scrollPane then
+        return
+    end
+
+    local step = 55
+    local current = getGuiScrollPosition(scrollPane)
+
+    if button == "mouse_wheel_up" then
+        local target = math.max(0, current - step)
+        guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
+        guiScrollFallback[scrollPane] = target
+        cancelEvent()
+    elseif button == "mouse_wheel_down" then
+        local target = current + step
+        guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
+        guiScrollFallback[scrollPane] = target
+        cancelEvent()
+    end
+end
+
+addEventHandler("onClientKey", root, handleGuiScroll)
+cacheEvent("guiScroll", handleGuiScroll)
 
 local function addJobButton(name, fn, side, defaultKey)
     addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
@@ -1458,7 +1511,7 @@ local function addJobDirectoryRow(job, rowY)
     local jobButton = guiCreateButton(
         10,
         rowY,
-        270,
+        220,
         38,
         string.format("%s (лвл %s)", job.name, job.level),
         false,
@@ -1466,9 +1519,9 @@ local function addJobDirectoryRow(job, rowY)
     )
 
     local quitButton = guiCreateButton(
-        290,
+        235,
         rowY,
-        105,
+        90,
         38,
         "Уволиться",
         false,
@@ -1476,9 +1529,9 @@ local function addJobDirectoryRow(job, rowY)
     )
 
     local infoLabel = guiCreateLabel(
-        410,
+        335,
         rowY,
-        520,
+        500,
         38,
         "Место: " .. job.location,
         false,
