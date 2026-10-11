@@ -92,7 +92,9 @@ _G.GH_Cache.keyHandler = keyBindInterceptor
 -- ИНТЕРФЕЙС
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
-local windowW, windowH = 780, 600
+-- Размер и расположение сделаны по дизайну из прикреплённого CEGUI-варианта.
+-- Ограничение по экрану оставляем, чтобы окно не обрезалось на маленьком разрешении.
+local windowW, windowH = 750, 720
 windowW = math.min(windowW, screenW - 40)
 windowH = math.min(windowH, screenH - 40)
 local x = math.max(20, (screenW - windowW) / 2)
@@ -111,47 +113,12 @@ guiWindowSetSizable(mainWin, false)
 guiWindowSetMovable(mainWin, true)
 guiSetVisible(mainWin, false)
 
-local function setGuiPropertySafe(element, property, value)
-    pcall(guiSetProperty, element, property, value)
-end
-
-local function styleButton(button, accent)
-    guiSetFont(button, "default-small")
-    setGuiPropertySafe(button, "NormalTextColour", accent and "FF55B6FF" or "FFEAF2FF")
-    setGuiPropertySafe(button, "HoverTextColour", "FFFFFFFF")
-    setGuiPropertySafe(button, "PushedTextColour", "FF9AD5FF")
-end
-
-local headerLabel = guiCreateLabel(
-    20,
-    8,
-    windowW - 40,
-    18,
-    "Панель управления",
-    false,
-    mainWin
-)
-guiSetFont(headerLabel, "default-bold-small")
-guiLabelSetColor(headerLabel, 85, 182, 255)
-
-local statusLabel = guiCreateLabel(
-    20,
-    28,
-    windowW - 40,
-    17,
-    "F9 — открыть или закрыть меню    |    окно можно перетаскивать за заголовок",
-    false,
-    mainWin
-)
-guiSetFont(statusLabel, "default-small")
-guiLabelSetColor(statusLabel, 140, 160, 185)
-
 -- Создаём панель вкладок
 local tabPanel = guiCreateTabPanel(
-    12,
-    50,
-    windowW - 24,
-    windowH - 62,
+    10,
+    25,
+    windowW - 20,
+    windowH - 40,
     false,
     mainWin
 )
@@ -162,23 +129,11 @@ local tabFun = guiCreateTab(
     tabPanel
 )
 
-local funHint = guiCreateLabel(
-    15,
-    10,
-    windowW - 70,
-    20,
-    "Выберите действие. Кнопка справа меняет клавишу.",
-    false,
-    tabFun
-)
-guiSetFont(funHint, "default-small")
-guiLabelSetColor(funHint, 140, 160, 185)
-
 local scrollFun = guiCreateScrollPane(
-    10,
-    38,
-    windowW - 44,
-    windowH - 118,
+    5,
+    5,
+    windowW - 30,
+    windowH - 80,
     false,
     tabFun
 )
@@ -190,9 +145,9 @@ local colY = {
 }
 
 local columnX = {
-    left = 15,
-    center = 260,
-    right = 505
+    left = 10,
+    center = 250,
+    right = 490
 }
 
 
@@ -215,7 +170,7 @@ local function addActionButton(
         posX,
         posY,
         185,
-        36,
+        35,
         name,
         false,
         parent
@@ -225,14 +180,11 @@ local function addActionButton(
         posX + 190,
         posY,
         40,
-        36,
+        35,
         defaultKey and string.upper(defaultKey) or "?",
         false,
         parent
     )
-
-    styleButton(actionButton, false)
-    styleButton(bindButton, true)
 
     bindsData[bindButton] = {
         fn = fn,
@@ -1022,7 +974,6 @@ for _, edit in ipairs({ editTakeX, editTakeY, editTakeZ, editPutX, editPutY, edi
 end
 
 local btnApplyFlySettings = guiCreateButton(400, 420, 320, 40, "Применить настройки", false, tabFlySettings)
-styleButton(btnApplyFlySettings, true)
 
 local function getNumberFromEdit(edit, oldValue, minValue, maxValue)
     local value = tonumber(guiGetText(edit))
@@ -1247,19 +1198,7 @@ end
 
 -- ВКЛАДКА: РАБОТЫ
 local tabJobs = guiCreateTab("Работы", tabPanel)
-local jobsHint = guiCreateLabel(
-    15,
-    10,
-    windowW - 70,
-    20,
-    "Слева — запуск работы, справа — увольнение, ниже указано место.",
-    false,
-    tabJobs
-)
-guiSetFont(jobsHint, "default-small")
-guiLabelSetColor(jobsHint, 140, 160, 185)
-
-local scrollJobs = guiCreateScrollPane(10, 38, windowW - 44, windowH - 118, false, tabJobs)
+local scrollJobs = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabJobs)
 guiScrollPaneSetScrollBars(scrollJobs, false, true)
 local colYJobs = { left = 10, center = 10, right = 10 }
 
@@ -1723,9 +1662,6 @@ local function addJobDirectoryRow(job, rowY)
     guiLabelSetVerticalAlign(infoLabel, "center")
     guiSetFont(infoLabel, "default-small")
     guiLabelSetColor(infoLabel, 150, 170, 195)
-
-    styleButton(jobButton, false)
-    styleButton(quitButton, true)
 
     addEventHandler("onClientGUIClick", jobButton, function()
         if waitingForBind then return end
