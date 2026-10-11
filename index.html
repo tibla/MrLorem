@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MR.Lorem | Control Panel</title>
+    <style>
+:root {
+    --bg: rgba(8, 13, 24, .96);
+    --panel: rgba(17, 25, 42, .98);
+    --panel-light: rgba(31, 43, 66, .78);
+    --border: rgba(155, 178, 220, .16);
+    --text: #f2f6ff;
+    --muted: #94a4c1;
+    --accent: #6d8cff;
+    --accent-2: #8b6dff;
+    --danger: #ff667d;
+    --shadow: 0 30px 80px rgba(0, 0, 0, .55);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-family: Arial, Helvetica, sans-serif;
+    background: transparent;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 20%, rgba(65, 89, 180, .18), transparent 48%);
+}
+
+button, input { font: inherit; }
+button { color: inherit; }
+
+.panel {
+    width: min(1120px, 94vw);
+    height: min(740px, 90vh);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    backdrop-filter: blur(16px);
+}
+
+.topbar {
+    min-height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.eyebrow {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+h1, h2, h3, p { margin: 0; }
+h1 { margin-top: 4px; font-size: 24px; letter-spacing: -.5px; }
+h2 { font-size: 18px; }
+h3 { font-size: 14px; }
+
+.topbar-right, .footer, .section-heading, .directory-heading {
+    display: flex;
+    align-items: center;
+}
+
+.topbar-right { gap: 9px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #5ef09c; box-shadow: 0 0 14px #5ef09c; }
+.status-text { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
+.status-text.active { color: #5ef09c; }
+
+.icon-button {
+    width: 32px;
+    height: 32px;
+    margin-left: 14px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .04);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.icon-button:hover { color: var(--text); background: rgba(255, 255, 255, .10); }
+
+.tabs {
+    display: flex;
+    gap: 7px;
+    padding: 12px 20px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.tab {
+    padding: 11px 17px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+.tab-content {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    padding: 22px 24px;
+    overflow: auto;
+}
+
+.tab-content.active { display: block; }
+
+.section-heading { justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.section-heading p, .directory-heading span { margin-top: 5px; color: var(--muted); font-size: 12px; }
+.hint { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+.action-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.action-grid.compact { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 25px; }
+
+.action-card {
+    min-height: 48px;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.action-main, .bind-button, .job-start, .job-stop, .primary-button {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.action-main, .job-start {
+    flex: 1;
+    padding: 10px 12px;
+    text-align: left;
+    background: var(--panel-light);
+    font-size: 12px;
+}
+
+.action-main:hover, .job-start:hover { background: rgba(109, 140, 255, .20); border-color: rgba(109, 140, 255, .55); }
+.action-main:active, .job-start:active, .job-stop:active, .primary-button:active { transform: translateY(1px); }
+
+.bind-button {
+    width: 48px;
+    flex: 0 0 48px;
+    background: rgba(255, 255, 255, .04);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.bind-button:hover { background: rgba(139, 109, 255, .22); border-color: var(--accent-2); }
+.bind-button.waiting { color: #ffd66d; border-color: #ffd66d; }
+
+.directory-heading {
+    justify-content: space-between;
+    margin: 5px 0 10px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--border);
+}
+
+.directory-heading span { margin: 0; }
+.job-directory { display: flex; flex-direction: column; gap: 8px; }
+
+.job-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.1fr) 1.4fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .025);
+}
+
+.job-name { font-size: 12px; font-weight: 700; }
+.job-level { display: block; margin-top: 3px; color: var(--accent); font-size: 10px; font-weight: 400; }
+.job-location { color: var(--muted); font-size: 11px; }
+.job-description { margin-top: 4px; color: #71819e; font-size: 10px; }
+
+.job-stop {
+    padding: 9px 13px;
+    background: rgba(255, 102, 125, .10);
+    color: #ff9aaa;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.job-stop:hover { background: rgba(255, 102, 125, .22); border-color: rgba(255, 102, 125, .5); }
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    max-width: 720px;
+}
+
+.field { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 12px; }
+.field input { width: 120px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; outline: none; background: rgba(0, 0, 0, .22); color: var(--text); }
+.field input:focus { border-color: var(--accent); }
+
+.checks { display: flex; flex-direction: column; gap: 12px; margin: 28px 0; color: var(--muted); font-size: 12px; }
+.check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.check input { accent-color: var(--accent); }
+
+.primary-button { padding: 11px 18px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: 0; font-size: 12px; font-weight: 700; }
+.primary-button:hover { filter: brightness(1.12); }
+
+.footer { justify-content: space-between; min-height: 38px; padding: 0 24px; border-top: 1px solid var(--border); color: #71819e; font-size: 10px; }
+
+.toast { position: fixed; left: 50%; bottom: 34px; transform: translate(-50%, 20px); padding: 10px 15px; border: 1px solid var(--border); border-radius: 9px; background: #18243b; opacity: 0; pointer-events: none; color: var(--text); font-size: 12px; transition: opacity .2s ease, transform .2s ease; }
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 900px) {
+    .action-grid, .action-grid.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .job-row { grid-template-columns: 1fr; }
+    .job-stop { width: 100%; }
+}
+
+
+    </style>
+</head>
+<body>
+    <main class="panel" id="panel">
+        <header class="topbar">
+            <div>
+                <div class="eyebrow">MR.LOREM</div>
+                <h1>Control Panel</h1>
+            </div>
+            <div class="topbar-right">
+                <span class="status-dot"></span>
+                <span class="status-text">CEF ONLINE</span>
+                <button class="icon-button" id="closeButton" title="Закрыть">×</button>
+            </div>
+        </header>
+
+        <nav class="tabs" id="tabs">
+            <button class="tab active" data-tab="fun">Приколы</button>
+            <button class="tab" data-tab="jobs">Работы</button>
+            <button class="tab" data-tab="fly">Настройки Fly</button>
+        </nav>
+
+        <section class="tab-content active" data-content="fun">
+            <div class="section-heading">
+                <div>
+                    <h2>Быстрые действия</h2>
+                    <p>Нажми кнопку или назначь горячую клавишу.</p>
+                </div>
+                <span class="hint">F9 — открыть/закрыть</span>
+            </div>
+            <div class="action-grid" id="funActions"></div>
+        </section>
+
+        <section class="tab-content" data-content="jobs">
+            <div class="section-heading">
+                <div>
+                    <h2>Работы</h2>
+                    <p>Быстрые действия и список доступных профессий.</p>
+                </div>
+                <span class="hint" id="farmStatus">Автофарм выключен</span>
+            </div>
+
+            <div class="action-grid compact" id="jobActions"></div>
+
+            <div class="directory-heading">
+                <h3>Все работы</h3>
+                <span>название · уровень · место · увольнение</span>
+            </div>
+            <div class="job-directory" id="jobDirectory"></div>
+        </section>
+
+        <section class="tab-content" data-content="fly">
+            <div class="section-heading">
+                <div>
+                    <h2>Настройки Fly</h2>
+                    <p>Изменения применяются только после нажатия кнопки.</p>
+                </div>
+            </div>
+
+            <div class="settings-grid">
+                <label class="field">
+                    <span>Скорость персонажа</span>
+                    <input id="playerSpeed" type="number" min="0.05" max="10" step="0.05">
+                </label>
+                <label class="field">
+                    <span>Ускорение Shift</span>
+                    <input id="playerBoost" type="number" min="1" max="20" step="0.1">
+                </label>
+                <label class="field">
+                    <span>Скорость машины</span>
+                    <input id="carSpeed" type="number" min="0.05" max="10" step="0.05">
+                </label>
+                <label class="field">
+                    <span>Ускорение машины</span>
+                    <input id="carBoost" type="number" min="1" max="20" step="0.1">
+                </label>
+            </div>
+
+            <div class="checks">
+                <label class="check"><input id="hidePlayer" type="checkbox"><span>Скрывать персонажа во время fly</span></label>
+                <label class="check"><input id="hideVehicle" type="checkbox"><span>Скрывать машину во время flycar</span></label>
+                <label class="check"><input id="disableCarCollisions" type="checkbox"><span>Отключать столкновения машины</span></label>
+            </div>
+
+            <button class="primary-button" id="applyFly">Применить настройки</button>
+        </section>
+
+        <footer class="footer">
+            <span>Локальный Web UI</span>
+            <span>ESC — закрыть · клик по клавише — переназначить</span>
+        </footer>
+    </main>
+
+    <div class="toast" id="toast"></div>
+    <script>
+(function () {
+    'use strict';
+
+    let state = {
+        fun: [],
+        jobs: [],
+        jobDirectory: [],
+        fly: {},
+        autoMode: false
+    };
+
+    let waitingBindId = null;
+
+    const byId = (id) => document.getElementById(id);
+
+    function callLua(eventName) {
+        const args = Array.prototype.slice.call(arguments, 1);
+
+        if (window.mta && typeof window.mta.triggerEvent === 'function') {
+            window.mta.triggerEvent.apply(window.mta, [eventName].concat(args));
+        }
+    }
+
+    function showToast(message) {
+        const toast = byId('toast');
+        if (!toast) return;
+
+        toast.textContent = message;
+        toast.classList.add('visible');
+
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(function () {
+            toast.classList.remove('visible');
+        }, 1800);
+    }
+
+    function displayKey(key) {
+        if (!key) return '—';
+
+        const normalized = String(key).toLowerCase();
+        const names = {
+            lshift: 'SHIFT',
+            rshift: 'R-SHIFT',
+            lctrl: 'CTRL',
+            rctrl: 'R-CTRL',
+            lalt: 'ALT',
+            ralt: 'R-ALT',
+            space: 'SPACE',
+            backspace: 'BACKSPACE',
+            enter: 'ENTER',
+            escape: 'ESC',
+            tab: 'TAB'
+        };
+
+        return names[normalized] || String(key).toUpperCase();
+    }
+
+    function clearNode(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function createActionCard(action) {
+        const card = document.createElement('div');
+        card.className = 'action-card';
+
+        const actionButton = document.createElement('button');
+        actionButton.type = 'button';
+        actionButton.className = 'action-main';
+        actionButton.textContent = action.name || 'Действие';
+        actionButton.addEventListener('click', function () {
+            callLua('CEF:Action', action.id);
+        });
+
+        const bindButton = document.createElement('button');
+        bindButton.type = 'button';
+        bindButton.className = 'bind-button';
+        bindButton.textContent = displayKey(action.key);
+        bindButton.title = 'Нажмите, затем клавишу для нового бинда';
+        bindButton.addEventListener('click', function () {
+            waitingBindId = action.id;
+            document.querySelectorAll('.bind-button.waiting').forEach(function (button) {
+                button.classList.remove('waiting');
+            });
+            bindButton.classList.add('waiting');
+            bindButton.textContent = '…';
+            showToast('Нажмите клавишу для бинда или ESC для отмены');
+        });
+
+        card.appendChild(actionButton);
+        card.appendChild(bindButton);
+        return card;
+    }
+
+    function renderActions(containerId, actions, filter) {
+        const container = byId(containerId);
+        if (!container) return;
+
+        clearNode(container);
+
+        (actions || []).filter(filter || function () { return true; }).forEach(function (action) {
+            container.appendChild(createActionCard(action));
+        });
+
+        if (!container.children.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'Нет доступных действий';
+            container.appendChild(empty);
+        }
+    }
+
+    function createJobRow(job) {
+        const row = document.createElement('div');
+        row.className = 'job-row';
+
+        const startButton = document.createElement('button');
+        startButton.type = 'button';
+        startButton.className = 'job-start';
+        startButton.textContent = (job.name || 'Работа') + ' (лвл ' + (job.level || 0) + ')';
+        startButton.addEventListener('click', function () {
+            callLua('CEF:Action', job.startId);
+        });
+
+        const details = document.createElement('div');
+        details.className = 'job-details';
+
+        const location = document.createElement('div');
+        location.className = 'job-location';
+        location.textContent = 'Место: ' + (job.location || 'не указано');
+
+        const description = document.createElement('div');
+        description.className = 'job-description';
+        description.textContent = job.description || 'Доступная работа';
+
+        details.appendChild(location);
+        details.appendChild(description);
+
+        const stopButton = document.createElement('button');
+        stopButton.type = 'button';
+        stopButton.className = 'job-stop';
+        stopButton.textContent = 'Уволиться';
+        stopButton.addEventListener('click', function () {
+            callLua('CEF:Action', job.stopId);
+        });
+
+        row.appendChild(startButton);
+        row.appendChild(details);
+        row.appendChild(stopButton);
+        return row;
+    }
+
+    function renderJobs() {
+        const container = byId('jobDirectory');
+        if (!container) return;
+
+        clearNode(container);
+        (state.jobDirectory || []).forEach(function (job) {
+            container.appendChild(createJobRow(job));
+        });
+
+        if (!container.children.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'Список работ пока пуст';
+            container.appendChild(empty);
+        }
+    }
+
+    function renderFlySettings() {
+        const fly = state.fly || {};
+        const fields = {
+            playerSpeed: 'playerSpeed',
+            playerBoost: 'playerBoost',
+            carSpeed: 'carSpeed',
+            carBoost: 'carBoost'
+        };
+
+        Object.keys(fields).forEach(function (key) {
+            const input = byId(fields[key]);
+            if (input && fly[key] !== undefined) input.value = fly[key];
+        });
+
+        const checks = {
+            hidePlayer: 'hidePlayer',
+            hideVehicle: 'hideVehicle',
+            disableCarCollisions: 'disableCarCollisions'
+        };
+
+        Object.keys(checks).forEach(function (key) {
+            const input = byId(checks[key]);
+            if (input && fly[key] !== undefined) input.checked = !!fly[key];
+        });
+    }
+
+    function renderStatus() {
+        const status = byId('farmStatus');
+        if (!status) return;
+
+        status.textContent = state.autoMode ? 'Автофарм включён' : 'Готов к работе';
+        status.classList.toggle('active', !!state.autoMode);
+    }
+
+    function render() {
+        renderActions('funActions', state.fun);
+        renderActions('jobActions', state.jobs, function (action) {
+            return !action.kind;
+        });
+        renderJobs();
+        renderFlySettings();
+        renderStatus();
+    }
+
+    function finishBind(key) {
+        if (!waitingBindId) return false;
+
+        callLua('CEF:SetBind', waitingBindId, key || '');
+        waitingBindId = null;
+        showToast(key ? 'Бинд установлен: ' + displayKey(key) : 'Бинд очищен');
+        return true;
+    }
+
+    function browserKeyName(event) {
+        if (event.key === 'Escape') return 'escape';
+        if (event.key === ' ') return 'space';
+        if (event.key === '[' || event.code === 'BracketLeft') return '[';
+        if (event.key === ']' || event.code === 'BracketRight') return ']';
+        if (event.key === '\\') return '\\';
+        if (event.key && event.key.length === 1) return event.key.toLowerCase();
+        if (event.code && event.code.indexOf('Key') === 0) return event.code.slice(3).toLowerCase();
+        if (event.code && event.code.indexOf('Digit') === 0) return event.code.slice(5);
+        return String(event.key || '').toLowerCase();
+    }
+
+    window.setLuaState = function (nextState) {
+        if (!nextState) return;
+        state = nextState;
+        render();
+    };
+
+    document.addEventListener('click', function (event) {
+        const tab = event.target.closest('.tab');
+        if (!tab) return;
+
+        const tabName = tab.getAttribute('data-tab');
+        document.querySelectorAll('.tab').forEach(function (item) {
+            item.classList.toggle('active', item === tab);
+        });
+        document.querySelectorAll('.tab-content').forEach(function (page) {
+            page.classList.toggle('active', page.getAttribute('data-content') === tabName);
+        });
+    });
+
+    document.addEventListener('click', function (event) {
+        if (event.target.closest('#closeButton')) {
+            callLua('CEF:Toggle');
+        }
+
+        if (event.target.closest('#applyFly')) {
+            callLua(
+                'CEF:ApplyFly',
+                Number(byId('playerSpeed').value) || 1,
+                Number(byId('playerBoost').value) || 1,
+                Number(byId('carSpeed').value) || 1,
+                Number(byId('carBoost').value) || 1,
+                !!byId('hidePlayer').checked,
+                !!byId('hideVehicle').checked,
+                !!byId('disableCarCollisions').checked
+            );
+            showToast('Настройки Fly применены');
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (waitingBindId) {
+            event.preventDefault();
+
+            if (event.key === 'Escape') {
+                waitingBindId = null;
+                render();
+                showToast('Изменение бинда отменено');
+                return;
+            }
+
+            if (event.key === 'Backspace' || event.key === 'Delete') {
+                finishBind('');
+                render();
+                return;
+            }
+
+            finishBind(browserKeyName(event));
+            render();
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            callLua('CEF:Toggle');
+        }
+    });
+
+    window.addEventListener('blur', function () {
+        if (waitingBindId) {
+            waitingBindId = null;
+            render();
+        }
+    });
+
+    render();
+})();
+
+
+    </script>
+</body>
+</html>
+
+
