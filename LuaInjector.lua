@@ -7,55 +7,39 @@ _G.GH_Cache.binds = _G.GH_Cache.binds or {}
 _G.GH_Cache.gui = _G.GH_Cache.gui or {}
 _G.GH_Cache.timers = _G.GH_Cache.timers or {}
 
-local dxActions = {}
-local dxActionLists = { fun = {}, jobs = {} }
-local dxJobs = {}
-local nextDxActionId = 0
+-- Если ранее была загружена старая версия панели, аккуратно убираем её UI.
+if type(fullCleanup) == "function" then
+    pcall(fullCleanup)
+end
+
+local bindsData = {}
 local waitingForBind = nil
 local autoMode = false
 local autoTimer = nil
-local dxVisible = false
-local dxTab = "actions"
-local dxScroll = { fun = 0, jobs = 0 }
-local dxEditingField = nil
-local dxWindowX, dxWindowY = 0, 0
-local dxDragging = false
-local dxDragOffsetX, dxDragOffsetY = 0, 0
-local dxFlyValues = {
-    playerSpeed = "0.60",
-    playerBoost = "2.50",
-    carSpeed = "0.80",
-    carBoost = "2.50"
-}
-local dxFlyChecks = {
-    hidePlayer = false,
-    hideVehicle = false,
-    disableCarCollisions = false
-}
-local dxFlyChecksDirty = false
 
 local function cacheEvent(name, fn)
     _G.GH_Cache.events[name] = { root = root, fn = fn }
 end
 
 function fullCleanup()
-    -- 1. Снимаем все бинды кнопок
-    for _, data in pairs(dxActions) do
-        if data.boundKey and data.bindFn then
-            unbindKey(data.boundKey, "down", data.bindFn)
-        end
+    -- 1. Удаляем главное окно
+    if isElement(mainWin) then destroyElement(mainWin) end
+    
+    -- 2. Снимаем все бинды кнопок
+    for btn, data in pairs(bindsData) do
+        if data.key then unbindKey(data.key, "down", data.fn) end
     end
     unbindKey("f9", "down")
     unbindKey("]", "down")
     unbindKey("lshift", "down")
     
-    -- 2. Очищаем активные таймеры
+    -- 3. Очищаем активные таймеры
     if isTimer(autoTimer) then killTimer(autoTimer) end
     for _, timer in pairs(_G.GH_Cache.timers) do
         if isTimer(timer) then killTimer(timer) end
     end
     
-    -- 3. Удаляем рендеры и события
+    -- 4. Удаляем рендеры и события
     for eventName, data in pairs(_G.GH_Cache.events) do
         removeEventHandler(eventName, data.root, data.fn)
     end
@@ -63,79 +47,271 @@ function fullCleanup()
         removeEventHandler("onClientKey", root, _G.GH_Cache.keyHandler)
     end
     
-    -- 4. Очистка кэша
+    -- 5. Очистка кэша
     _G.GH_Cache.events = {}
     _G.GH_Cache.timers = {}
-    dxActions = {}
-    dxActionLists = { fun = {}, jobs = {} }
-    dxJobs = {}
+    bindsData = {}
     waitingForBind = nil
-    dxEditingField = nil
-    dxVisible = false
-    dxDragging = false
     
     showCursor(false)
     outputChatBox("[Engine] #FFFF00Скрипт полностью выгружен.", 255, 255, 255, true)
 end
 
 ----------------------------------------------------------------
--- РЕЕСТР ДЕЙСТВИЙ DIRECTX-ИНТЕРФЕЙСА
+-- ЛОГИКА БИНДЕРА (КЛИК ПО КВАДРАТУ)
 ----------------------------------------------------------------
-local function registerDxAction(tabName, name, fn, defaultKey, metadata)
-    nextDxActionId = nextDxActionId + 1
-
-    local id = "action_" .. tostring(nextDxActionId)
-    local action = {
-        id = id,
-        name = name,
-        fn = fn,
-        key = defaultKey,
-        boundKey = nil,
-        bindFn = nil,
-        metadata = metadata or {},
-    }
-
-    action.bindFn = function()
-        if action.fn then
-            action.fn()
-        end
+local function keyBindInterceptor(button, press)
+    if not press or not waitingForBind then return end
+    cancelEvent()
+    
+    local data = bindsData[waitingForBind]
+    if data.key then unbindKey(data.key, "down", data.fn) end
+    
+    if button == "escape" or button == "backspace" then
+        data.key = nil
+        guiSetText(waitingForBind, "?")
+        outputChatBox("Бинд удален", 255, 0, 0)
+    else
+        data.key = button
+        guiSetText(waitingForBind, string.upper(button))
+        bindKey(button, "down", data.fn)
+        outputChatBox("Забинджено на: " .. string.upper(button), 0, 255, 0)
     end
-
-    dxActions[id] = action
-    table.insert(dxActionLists[tabName], action)
-
-    if defaultKey and defaultKey ~= "" then
-        bindKey(defaultKey, "down", action.bindFn)
-        action.boundKey = defaultKey
-    end
-
-    return id
+    waitingForBind = nil
 end
+addEventHandler("onClientKey", root, keyBindInterceptor)
+_G.GH_Cache.keyHandler = keyBindInterceptor
 
 ----------------------------------------------------------------
--- DIRECTX-ИНТЕРФЕЙС
+-- ИНТЕРФЕЙС
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
+local windowW, windowH = 1000, 700
+local x = math.max(20, (screenW - windowW) / 2)
+local y = math.max(20, (screenH - windowH) / 2)
 
-local function addMenuButton(name, fn, side, defaultKey)
-    registerDxAction("fun", name, fn, defaultKey, {
-        side = side or "left",
-    })
+mainWin = guiCreateWindow(
+    x,
+    y,
+    windowW,
+    windowH,
+    "MR.Lorem  //  CONTROL HUB",
+    false
+)
+
+guiWindowSetSizable(mainWin, false)
+guiWindowSetMovable(mainWin, true)
+guiSetVisible(mainWin, false)
+
+local function setGuiPropertySafe(element, property, value)
+    pcall(guiSetProperty, element, property, value)
 end
 
-local function addJobButton(name, fn, side, defaultKey)
-    registerDxAction("jobs", name, fn, defaultKey, {
-        side = side or "left",
-    })
+local function styleButton(button, accent)
+    guiSetFont(button, "default-small")
+    setGuiPropertySafe(button, "NormalTextColour", accent and "FF55B6FF" or "FFEAF2FF")
+    setGuiPropertySafe(button, "HoverTextColour", "FFFFFFFF")
+    setGuiPropertySafe(button, "PushedTextColour", "FF9AD5FF")
 end
 
-bindKey("f9", "down", function()
-    if toggleDxUi then
-        toggleDxUi()
+local headerLabel = guiCreateLabel(
+    20,
+    8,
+    windowW - 40,
+    18,
+    "CONTROL HUB    |    быстрый доступ к функциям и работам",
+    false,
+    mainWin
+)
+guiSetFont(headerLabel, "default-bold-small")
+guiLabelSetColor(headerLabel, 85, 182, 255)
+
+local statusLabel = guiCreateLabel(
+    20,
+    28,
+    windowW - 40,
+    17,
+    "F9 — открыть или закрыть меню    |    окно можно перетаскивать за заголовок",
+    false,
+    mainWin
+)
+guiSetFont(statusLabel, "default-small")
+guiLabelSetColor(statusLabel, 140, 160, 185)
+
+-- Создаём панель вкладок
+local tabPanel = guiCreateTabPanel(
+    12,
+    50,
+    windowW - 24,
+    windowH - 62,
+    false,
+    mainWin
+)
+
+-- Вкладка «Приколы»
+local tabFun = guiCreateTab(
+    "Действия",
+    tabPanel
+)
+
+local funHint = guiCreateLabel(
+    15,
+    10,
+    windowW - 70,
+    20,
+    "Быстрые действия     •     клик по ? меняет клавишу     •     команды выполняются сразу",
+    false,
+    tabFun
+)
+guiSetFont(funHint, "default-small")
+guiLabelSetColor(funHint, 140, 160, 185)
+
+local scrollFun = guiCreateScrollPane(
+    10,
+    38,
+    windowW - 44,
+    windowH - 118,
+    false,
+    tabFun
+)
+local colY = {
+    left = 10,
+    center = 10,
+    right = 10
+}
+
+local columnX = {
+    left = 15,
+    center = 330,
+    right = 645
+}
+
+
+local function addActionButton(
+    parent,
+    columns,
+    name,
+    fn,
+    side,
+    defaultKey
+)
+    side = side or "left"
+
+    local posX = columnX[side] or columnX.left
+    local posY = columns[side] or columns.left
+
+    local actionButton = guiCreateButton(
+        posX,
+        posY,
+        245,
+        36,
+        name,
+        false,
+        parent
+    )
+
+    local bindButton = guiCreateButton(
+        posX + 250,
+        posY,
+        45,
+        36,
+        defaultKey and string.upper(defaultKey) or "?",
+        false,
+        parent
+    )
+
+    styleButton(actionButton, false)
+    styleButton(bindButton, true)
+
+    bindsData[bindButton] = {
+        fn = fn,
+        key = defaultKey,
+        name = name
+    }
+
+    if defaultKey then
+        bindKey(
+            defaultKey,
+            "down",
+            fn
+        )
     end
+
+    addEventHandler(
+        "onClientGUIClick",
+        actionButton,
+        function()
+            if not waitingForBind then
+                fn()
+            end
+        end,
+        false
+    )
+
+    addEventHandler(
+        "onClientGUIClick",
+        bindButton,
+        function()
+            if waitingForBind
+                and bindsData[waitingForBind]
+            then
+                local previous =
+                    bindsData[waitingForBind].key
+
+                guiSetText(
+                    waitingForBind,
+                    previous
+                        and string.upper(previous)
+                        or "?"
+                )
+            end
+
+            waitingForBind = source
+            guiSetText(source, "...")
+
+            outputChatBox(
+                "Нажми клавишу для бинда.",
+                255,
+                255,
+                0
+            )
+        end,
+        false
+    )
+
+    columns[side] = posY + 43
+end
+
+
+local function addMenuButton(
+    name,
+    fn,
+    side,
+    defaultKey
+)
+    addActionButton(
+        scrollFun,
+        colY,
+        name,
+        fn,
+        side,
+        defaultKey
+    )
+end
+bindKey("f9", "down", function()
+    local visible = not guiGetVisible(mainWin)
+
+    guiSetVisible(mainWin, visible)
+    showCursor(visible)
+    guiSetInputEnabled(visible)
 end)
 
-outputChatBox("[Engine] DirectX-панель готова. Открытие: F9", 0, 255, 0)
+outputChatBox(
+    "[Engine] F9 готов!",
+    0,
+    255,
+    0
+)
 ----------------------------------------------------------------
 -- НАСТРОЙКИ FLY
 ----------------------------------------------------------------
@@ -182,7 +358,7 @@ end
 local ESP_MAX_DISTANCE = 300 
 local COLOR_RED = tocolor(255, 0, 0, 255) 
 local COLOR_STOKE = tocolor(0, 0, 0, 220) 
-local espEnabled = true
+local espEnabled = false
 
 local function drawPlayerESP()
     local px, py, pz = getElementPosition(localPlayer)
@@ -238,131 +414,58 @@ local function teleportEntity(entity, x, y, z)
     end
 end
 
-local teleportLoadTimer = nil
-local TELEPORT_LOAD_DELAY = 300
-
-local function cancelTeleportLoad()
-    if isTimer(teleportLoadTimer) then
-        killTimer(teleportLoadTimer)
-        teleportLoadTimer = nil
-    end
-end
-
-local function getTeleportEntity()
-    local vehicle = getPedOccupiedVehicle(localPlayer)
-
-    if isElement(vehicle) then
-        return vehicle
-    end
-
-    return localPlayer
-end
-
-local function preloadAndTeleport(x, y, z, finalZ)
-    cancelTeleportLoad()
-
-    -- Предварительно загружаем модели и коллизии области
-    if type(enginePreloadWorldArea) == "function" then
-        enginePreloadWorldArea(x, y, z, "all")
-    end
-
-    if not finalZ then
-        local groundZ = getGroundPosition(x, y, z + 1000)
-
-        if groundZ and groundZ > 0 then
-            finalZ = groundZ + 1
-        else
-            finalZ = z + 5
-        end
-    end
-
-    local entity = getTeleportEntity()
-
-    if not isElement(entity) then
-        return
-    end
-
-    -- Сначала переносим немного выше земли,
-    -- чтобы объект успел прогрузиться без проваливания
-    setElementVelocity(entity, 0, 0, 0)
-    setElementPosition(entity, x, y, finalZ + 50)
-
-    teleportLoadTimer = setTimer(function()
-        teleportLoadTimer = nil
-
-        local currentEntity = getTeleportEntity()
-
-        if not isElement(currentEntity) then
-            return
-        end
-
-        setElementVelocity(currentEntity, 0, 0, 0)
-        setElementPosition(currentEntity, x, y, finalZ)
-    end, TELEPORT_LOAD_DELAY, 1)
-end
-
 function teleportToWaypoint()
-    local waypoint = nil
-
-    for _, blip in ipairs(getElementsByType("blip")) do
-        if getBlipIcon(blip) == 41 then
-            waypoint = blip
+    local waypoint = false
+    for _, v in ipairs(getElementsByType("blip")) do
+        if getBlipIcon(v) == 41 then
+            waypoint = v
             break
         end
     end
 
     if not waypoint then
-        outputChatBox("Поставь метку на карте (ПКМ)", 255, 200, 0)
+        outputChatBox("Поставь метку на карте (ПКМ)")
         return
     end
 
     local x, y, z = getElementPosition(waypoint)
+    local safeZ = nil
+    local startZ = 1000
 
-    preloadAndTeleport(x, y, z)
+    for i = startZ, 0, -25 do
+        local gz = getGroundPosition(x, y, i)
+        if gz and gz > 0 then
+            safeZ = gz + 1
+            break
+        end
+    end
 
-    outputChatBox(
-        "[Engine] Область перед телепортом загружается...",
-        0,
-        255,
-        0
-    )
+    if not safeZ then safeZ = z + 5 end
+
+    if localPlayer.vehicle then
+        setElementPosition(localPlayer.vehicle, x, y, safeZ + 50)
+    else
+        setElementPosition(localPlayer, x, y, safeZ + 50)
+    end
+
+    setTimer(function()
+        if localPlayer.vehicle then
+            setElementPosition(localPlayer.vehicle, x, y, safeZ)
+        else
+            setElementPosition(localPlayer, x, y, safeZ)
+        end
+    end, 200, 1)
 end
 
 function tpTake()
-    preloadAndTeleport(
-        483.034,
-        -1004.596,
-        21.436,
-        21.436
-    )
-
-    outputChatBox(
-        "[Engine] #00FF00ТП на точку 'Взять' (с машиной)!",
-        255,
-        255,
-        255,
-        true
-    )
+    teleportEntity(localPlayer, 483.034, -1004.596, 21.436)
+    outputChatBox("[Engine] #00FF00ТП на точку 'Взять' (с машиной)!", 255, 255, 255, true)
 end
 
 function tpPut()
-    preloadAndTeleport(
-        776.723,
-        -1581.878,
-        47.749,
-        47.749
-    )
-
-    outputChatBox(
-        "[Engine] #00FF00ТП на точку 'Положить' (с машиной)!",
-        255,
-        255,
-        255,
-        true
-    )
+    teleportEntity(localPlayer, 776.723, -1581.878, 47.749)
+    outputChatBox("[Engine] #00FF00ТП на точку 'Положить' (с машиной)!", 255, 255, 255, true)
 end
-
-
 function rielt()
     triggerServerEvent ( "PlayerEnterToRealtor", root, 1 )
     outputChatBox("[Engine] #00FF00ТП на rielt", 255, 255, 255, true)
@@ -794,37 +897,72 @@ function getPlayerByTextID(id)
 end
 
 ----------------------------------------------------------------
--- НАСТРОЙКИ FLY ДЛЯ DIRECTX
+-- ВКЛАДКА НАСТРОЕК FLY
 ----------------------------------------------------------------
-local function clampNumber(value, oldValue, minValue, maxValue)
-    value = tonumber(value)
-    if not value then
-        return oldValue
-    end
+local tabFlySettings = guiCreateTab("Настройки Fly", tabPanel)
 
+local flyTitle = guiCreateLabel(18, 12, 450, 22, "FLY CONTROL", false, tabFlySettings)
+guiSetFont(flyTitle, "default-bold-small")
+guiLabelSetColor(flyTitle, 85, 182, 255)
+
+local flyHint = guiCreateLabel(18, 35, 650, 18, "Настрой параметры движения, затем нажми «Применить настройки».", false, tabFlySettings)
+guiSetFont(flyHint, "default-small")
+guiLabelSetColor(flyHint, 140, 160, 185)
+
+local flyPlayerTitle = guiCreateLabel(18, 70, 320, 18, "ПЕРСОНАЖ", false, tabFlySettings)
+guiSetFont(flyPlayerTitle, "default-bold-small")
+guiLabelSetColor(flyPlayerTitle, 87, 228, 157)
+
+guiCreateLabel(20, 100, 220, 25, "Скорость fly персонажа:", false, tabFlySettings)
+local editPlayerSpeed = guiCreateEdit(250, 97, 120, 28, tostring(flyConfig.playerSpeed), false, tabFlySettings)
+
+guiCreateLabel(20, 140, 220, 25, "Ускорение Shift:", false, tabFlySettings)
+local editPlayerBoost = guiCreateEdit(250, 137, 120, 28, tostring(flyConfig.playerBoost), false, tabFlySettings)
+
+local flyCarTitle = guiCreateLabel(440, 70, 320, 18, "МАШИНА", false, tabFlySettings)
+guiSetFont(flyCarTitle, "default-bold-small")
+guiLabelSetColor(flyCarTitle, 167, 120, 255)
+
+guiCreateLabel(440, 100, 220, 25, "Скорость fly машины:", false, tabFlySettings)
+local editCarSpeed = guiCreateEdit(670, 97, 120, 28, tostring(flyConfig.carSpeed), false, tabFlySettings)
+
+guiCreateLabel(440, 140, 220, 25, "Ускорение машины на Shift:", false, tabFlySettings)
+local editCarBoost = guiCreateEdit(670, 137, 120, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
+
+local flyOptionsTitle = guiCreateLabel(18, 205, 320, 18, "ДОПОЛНИТЕЛЬНЫЕ ОПЦИИ", false, tabFlySettings)
+guiSetFont(flyOptionsTitle, "default-bold-small")
+guiLabelSetColor(flyOptionsTitle, 255, 188, 90)
+
+local checkHidePlayer = guiCreateCheckBox(20, 235, 350, 25, "Скрывать персонажа во время fly", flyConfig.hidePlayer, false, tabFlySettings)
+local checkHideVehicle = guiCreateCheckBox(20, 270, 350, 25, "Скрывать машину во время flycar", flyConfig.hideVehicle, false, tabFlySettings)
+local checkNoCollision = guiCreateCheckBox(20, 305, 350, 25, "Отключать столкновения машины", flyConfig.disableCarCollisions, false, tabFlySettings)
+
+local btnApplyFlySettings = guiCreateButton(20, 355, 350, 40, "Применить настройки", false, tabFlySettings)
+styleButton(btnApplyFlySettings, true)
+
+local function getNumberFromEdit(edit, oldValue, minValue, maxValue)
+    local value = tonumber(guiGetText(edit))
+    if not value then return oldValue end
     return math.max(minValue, math.min(maxValue, value))
 end
 
-local function applyFlySettings(
-    playerSpeed,
-    playerBoost,
-    carSpeed,
-    carBoost,
-    hidePlayer,
-    hideVehicle,
-    disableCarCollisions
-)
-    flyConfig.playerSpeed = clampNumber(playerSpeed, flyConfig.playerSpeed, 0.05, 10)
-    flyConfig.playerBoost = clampNumber(playerBoost, flyConfig.playerBoost, 1, 20)
-    flyConfig.carSpeed = clampNumber(carSpeed, flyConfig.carSpeed, 0.05, 10)
-    flyConfig.carBoost = clampNumber(carBoost, flyConfig.carBoost, 1, 20)
+addEventHandler("onClientGUIClick", btnApplyFlySettings, function()
+    flyConfig.playerSpeed = getNumberFromEdit(editPlayerSpeed, flyConfig.playerSpeed, 0.05, 10)
+    flyConfig.playerBoost = getNumberFromEdit(editPlayerBoost, flyConfig.playerBoost, 1, 20)
+    flyConfig.carSpeed = getNumberFromEdit(editCarSpeed, flyConfig.carSpeed, 0.05, 10)
+    flyConfig.carBoost = getNumberFromEdit(editCarBoost, flyConfig.carBoost, 1, 20)
 
-    flyConfig.hidePlayer = hidePlayer == true
-    flyConfig.hideVehicle = hideVehicle == true
-    flyConfig.disableCarCollisions = disableCarCollisions == true
+    flyConfig.hidePlayer = guiCheckBoxGetSelected(checkHidePlayer)
+    flyConfig.hideVehicle = guiCheckBoxGetSelected(checkHideVehicle)
+    flyConfig.disableCarCollisions = guiCheckBoxGetSelected(checkNoCollision)
+
+    guiSetText(editPlayerSpeed, tostring(flyConfig.playerSpeed))
+    guiSetText(editPlayerBoost, tostring(flyConfig.playerBoost))
+    guiSetText(editCarSpeed, tostring(flyConfig.carSpeed))
+    guiSetText(editCarBoost, tostring(flyConfig.carBoost))
 
     outputChatBox("[Fly] #00FF00Настройки применены!", 255, 255, 255, true)
-end
+end, false)
 
 function teleportToTextID(id, name)
     local targetPlayer = getPlayerByTextID(id)
@@ -971,7 +1109,25 @@ for _, item in ipairs(menuButtons) do
 end
 
 -- ВКЛАДКА: РАБОТЫ
--- Рабочие кнопки регистрируются в DirectX через addJobButton выше.
+local tabJobs = guiCreateTab("Работы", tabPanel)
+local jobsHint = guiCreateLabel(
+    15,
+    10,
+    windowW - 70,
+    20,
+    "СПРАВОЧНИК РАБОТ     •     слева запуск     •     справа увольнение     •     место указано в описании",
+    false,
+    tabJobs
+)
+guiSetFont(jobsHint, "default-small")
+guiLabelSetColor(jobsHint, 140, 160, 185)
+
+local scrollJobs = guiCreateScrollPane(10, 38, windowW - 44, windowH - 118, false, tabJobs)
+local colYJobs = { left = 10, center = 10, right = 10 }
+
+local function addJobButton(name, fn, side, defaultKey)
+    addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
+end
 
 -- Справочник профессий из job_configs.lua.
 -- Левая кнопка пытается открыть/запустить работу, правая увольняет.
@@ -1299,34 +1455,57 @@ local jobDirectory = {
 }
 
 local function addJobDirectoryRow(job, rowY)
-    local startId = registerDxAction(
-        "jobs",
+    local jobButton = guiCreateButton(
+        10,
+        rowY,
+        270,
+        38,
         string.format("%s (лвл %s)", job.name, job.level),
-        job.start,
-        nil,
-        { kind = "job-start" }
+        false,
+        scrollJobs
     )
 
-    local stopId = registerDxAction(
-        "jobs",
+    local quitButton = guiCreateButton(
+        290,
+        rowY,
+        105,
+        38,
         "Уволиться",
-        function()
-            if job.stop then
-                job.stop()
-                outputChatBox("Запрос на увольнение отправлен.", 255, 220, 0)
-            end
-        end,
-        nil,
-        { kind = "job-stop" }
+        false,
+        scrollJobs
     )
 
-    table.insert(dxJobs, {
-        name = job.name,
-        level = job.level,
-        location = job.location,
-        startId = startId,
-        stopId = stopId,
-    })
+    local infoLabel = guiCreateLabel(
+        410,
+        rowY,
+        520,
+        38,
+        "Место: " .. job.location,
+        false,
+        scrollJobs
+    )
+    guiLabelSetHorizontalAlign(infoLabel, "left", true)
+    guiLabelSetVerticalAlign(infoLabel, "center")
+    guiSetFont(infoLabel, "default-small")
+    guiLabelSetColor(infoLabel, 150, 170, 195)
+
+    styleButton(jobButton, false)
+    styleButton(quitButton, true)
+
+    addEventHandler("onClientGUIClick", jobButton, function()
+        if waitingForBind then return end
+        if job.start then
+            job.start()
+        end
+    end, false)
+
+    addEventHandler("onClientGUIClick", quitButton, function()
+        if waitingForBind then return end
+        if job.stop then
+            job.stop()
+            outputChatBox("Запрос на увольнение отправлен.", 255, 220, 0)
+        end
+    end, false)
 end
 
 function repeirm()
@@ -1345,186 +1524,44 @@ function gasz()
 end
 cacheEvent("gasz", gasz)
 
-local avtobusWaypoint = nil
-local avtobusNextScan = 0
-local avtobusPreloadTimer = nil
-local avtobusPreloadPending = false
-local avtobusLastPreload = nil
-
-local WAYPOINT_SCAN_TIME = 300
-local PRELOAD_DELAY = 150
-
-local function stopAvtobusPreload()
-    if isTimer(avtobusPreloadTimer) then
-        killTimer(avtobusPreloadTimer)
-    end
-
-    avtobusPreloadTimer = nil
-    avtobusPreloadPending = false
-end
-
-local function teleportAvtobusVehicle(vehicle)
-    if not autoMode or not isElement(vehicle) then
-        return
-    end
-
-    if not isElement(avtobusWaypoint) then
-        return
-    end
-
-    local wx, wy, wz = getElementPosition(avtobusWaypoint)
-    local px, py, pz = getElementPosition(vehicle)
-
-    local dx = wx - px
-    local dy = wy - py
-    local dz = wz - pz
-
-    if dx * dx + dy * dy + dz * dz <= 9 then
-        return
-    end
-
-    setElementVelocity(vehicle, 0, 0, 0)
-    setElementPosition(vehicle, wx, wy, wz + 1.0)
-end
-
 function avtobus()
-    if not autoMode then
-        stopAvtobusPreload()
-        return
-    end
-
+    if not autoMode then return end
+    
     local veh = getPedOccupiedVehicle(localPlayer)
-
-    if not isElement(veh) then
-        if isTimer(autoTimer) then
-            killTimer(autoTimer)
-            autoTimer = nil
-        end
-
-        stopAvtobusPreload()
-        avtobusWaypoint = nil
-        avtobusLastPreload = nil
+    if not isElement(veh) then 
+        if isTimer(autoTimer) then killTimer(autoTimer) end
         autoMode = false
-        return
+        return 
     end
 
     if getElementHealth(veh) < 950 then
         fixVehicle(veh)
     end
-
+    
     if getElementCollisionsEnabled(veh) then
         setElementCollisionsEnabled(veh, false)
     end
 
-    local now = getTickCount()
-
-    -- Ищем новый waypoint только раз в 300 мс
-    if not isElement(avtobusWaypoint) or now >= avtobusNextScan then
-        avtobusWaypoint = nil
-        avtobusNextScan = now + WAYPOINT_SCAN_TIME
-
-        for _, blip in ipairs(getElementsByType("blip")) do
-            if getBlipIcon(blip) == 41 then
-                avtobusWaypoint = blip
-                break
-            end
+    local waypoint = false
+    local blips = getElementsByType("blip")
+    for i = 1, #blips do
+        if getBlipIcon(blips[i]) == 41 then 
+            waypoint = blips[i]
+            break 
         end
     end
 
-    if not isElement(avtobusWaypoint) then
-        return
-    end
-
-    local wx, wy, wz = getElementPosition(avtobusWaypoint)
-    local px, py, pz = getElementPosition(veh)
-
-    local dx = wx - px
-    local dy = wy - py
-    local dz = wz - pz
-
-    local distanceSquared = dx * dx + dy * dy + dz * dz
-
-    if distanceSquared <= 9 then
-        return
-    end
-
-    -- Если функция доступна в MTA 1.6+, сначала прогружаем область
-    if type(enginePreloadWorldArea) == "function" then
-        local needPreload = true
-
-        if avtobusLastPreload then
-            local lx = wx - avtobusLastPreload.x
-            local ly = wy - avtobusLastPreload.y
-            local lz = wz - avtobusLastPreload.z
-
-            -- Не повторяем загрузку почти той же области
-            if lx * lx + ly * ly + lz * lz < 2500 then
-                needPreload = false
-            end
-        end
-
-        if needPreload and not avtobusPreloadPending then
-            enginePreloadWorldArea(wx, wy, wz, "all")
-
-            avtobusLastPreload = {
-                x = wx,
-                y = wy,
-                z = wz
-            }
-
-            avtobusPreloadPending = true
-
-            stopAvtobusPreload()
-
-            avtobusPreloadPending = true
-
-            avtobusPreloadTimer = setTimer(function()
-                avtobusPreloadTimer = nil
-                avtobusPreloadPending = false
-
-                if autoMode and isElement(veh) then
-                    teleportAvtobusVehicle(veh)
-                end
-            end, PRELOAD_DELAY, 1)
-
-            return
+    if waypoint then
+        local wx, wy, wz = getElementPosition(waypoint)
+        local px, py, pz = getElementPosition(veh)
+        local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
+        
+        if dist > 2 then
+            setElementVelocity(veh, 0, 0, 0)
+            setElementPosition(veh, wx, wy, wz + 1.0)
         end
     end
-
-    teleportAvtobusVehicle(veh)
 end
-
-local function toggleBusFarm()
-    if isTimer(autoTimer) then
-        killTimer(autoTimer)
-        autoTimer = nil
-    end
-
-    autoMode = not autoMode
-
-    if autoMode then
-        autoTimer = setTimer(avtobus, 100, 0)
-
-        if _G.GH_Cache and _G.GH_Cache.timers then
-            _G.GH_Cache.timers.busFarm = autoTimer
-        end
-
-        outputChatBox("[Engine] #00FF00Auto-Farm (Автобус): ON", 255, 255, 255, true)
-    else
-        stopAvtobusPreload()
-        avtobusWaypoint = nil
-        avtobusLastPreload = nil
-
-        local vehicle = getPedOccupiedVehicle(localPlayer)
-        if isElement(vehicle) then
-            setElementCollisionsEnabled(vehicle, true)
-        end
-
-        outputChatBox("[Engine] #FF0000Auto-Farm (Автобус): OFF", 255, 255, 255, true)
-    end
-
-end
-cacheEvent("toggleBusFarm", toggleBusFarm)
 
 function eskavator()
     setTimer(function()
@@ -1537,7 +1574,7 @@ cacheEvent("eskavator", eskavator)
 local jobButtons = {
     { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center"},
     { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center"},
-    { name = "🚀 ФАРМ АВТОБУС (вкл/выкл)", fn = toggleBusFarm, side = "center" },
+    { name = "🚀 ФАРМ АВТОБУС(]) ", fn = avtobus, side = "center", key="]"},
     { name = "❄️ Очиститель снега", fn = snowblower, side = "left" },
     { name = "🚢 Теплоход", fn = sailor, side = "right" },
     { name = "🚀 ЭСКАВАТОР", fn = eskavator, side = "right" }
@@ -1547,11 +1584,60 @@ for _, item in ipairs(jobButtons) do
     addJobButton(item.name, item.fn, item.side, item.key)
 end
 
+local jobDirectoryY = math.max(
+    colYJobs.left,
+    colYJobs.center,
+    colYJobs.right
+) + 8
+
+local jobDirectoryTitle = guiCreateLabel(
+    10,
+    jobDirectoryY,
+    920,
+    25,
+    "ВСЕ РАБОТЫ     |     название (лвл)     |     действие     |     место",
+    false,
+    scrollJobs
+)
+guiSetFont(jobDirectoryTitle, "default-bold-small")
+guiLabelSetColor(jobDirectoryTitle, 85, 182, 255)
+jobDirectoryY = jobDirectoryY + 30
+
 for _, job in ipairs(jobDirectory) do
-    addJobDirectoryRow(job)
+    addJobDirectoryRow(job, jobDirectoryY)
+    jobDirectoryY = jobDirectoryY + 48
 end
 
-bindKey("]", "down", toggleBusFarm)
+bindKey("]", "down", function() 
+    if isTimer(autoTimer) then 
+        killTimer(autoTimer) 
+        autoTimer = nil
+    end
+    
+    autoMode = not autoMode 
+    
+    if autoMode then
+        autoTimer = setTimer(avtobus, 100, 0)
+        if _G.GH_Cache and _G.GH_Cache.timers then 
+            _G.GH_Cache.timers["busFarm"] = autoTimer 
+        end
+        outputChatBox("[Engine] #00FF00Auto-Farm (Автобус): ON", 255, 255, 255, true)
+    else
+        local v = getPedOccupiedVehicle(localPlayer)
+        if isElement(v) then 
+            setElementCollisionsEnabled(v, true) 
+        end
+        outputChatBox("[Engine] #FF0000Auto-Farm (Автобус): OFF", 255, 255, 255, true)
+    end
+end)
+
+
+-- ==========================================
+-- ВКЛАДКА LUA-КОДА
+-- Требуются: tabPanel, windowW, windowH
+-- ==========================================
+
+
 
 
 -- СКОРОСТЬ МАШИНЫ (Shift)
@@ -1575,729 +1661,5 @@ end
 bindKey("lshift", "down", speedBoost)
 _G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
 
-----------------------------------------------------------------
--- DIRECTX / DRAWDX UI
-----------------------------------------------------------------
-local DX_BASE_W, DX_BASE_H = 1080, 650
-
-local DX_COLOR = {
-    overlay = tocolor(2, 5, 12, 175),
-    background = tocolor(8, 13, 24, 250),
-    sidebar = tocolor(7, 13, 23, 255),
-    header = tocolor(11, 20, 35, 255),
-    surface = tocolor(17, 29, 48, 255),
-    surfaceHover = tocolor(24, 48, 76, 255),
-    line = tocolor(75, 111, 158, 150),
-    lineSoft = tocolor(75, 111, 158, 80),
-    text = tocolor(237, 244, 255, 255),
-    muted = tocolor(130, 151, 181, 255),
-    blue = tocolor(85, 182, 255, 255),
-    purple = tocolor(167, 120, 255, 255),
-    green = tocolor(87, 228, 157, 255),
-    red = tocolor(255, 113, 134, 255),
-    white = tocolor(255, 255, 255, 255)
-}
-
-local function getDxMetrics()
-    local scale = math.min(screenW / DX_BASE_W, screenH / DX_BASE_H)
-
-    if scale > 1 then
-        scale = 1
-    end
-
-    local centeredX = (screenW - DX_BASE_W * scale) / 2
-    local centeredY = (screenH - DX_BASE_H * scale) / 2
-
-    return scale,
-        centeredX + dxWindowX * scale,
-        centeredY + dxWindowY * scale
-end
-
-local function clampDxWindowPosition(scale)
-    local centeredX = (screenW - DX_BASE_W * scale) / 2
-    local centeredY = (screenH - DX_BASE_H * scale) / 2
-    local margin = 12
-
-    local minX = (margin - centeredX) / scale
-    local maxX = (screenW - margin - centeredX - DX_BASE_W * scale) / scale
-    local minY = (margin - centeredY) / scale
-    local maxY = (screenH - margin - centeredY - DX_BASE_H * scale) / scale
-
-    dxWindowX = math.max(minX, math.min(maxX, dxWindowX))
-    dxWindowY = math.max(minY, math.min(maxY, dxWindowY))
-end
-
-local function dxRect(scale, offsetX, offsetY, x, y, width, height, color)
-    dxDrawRectangle(
-        offsetX + x * scale,
-        offsetY + y * scale,
-        width * scale,
-        height * scale,
-        color,
-        true
-    )
-end
-
-local function dxRoundedRect(scale, offsetX, offsetY, x, y, width, height, radius, color)
-    radius = math.max(0, math.min(radius or 8, width / 2, height / 2))
-
-    if radius <= 0 then
-        dxRect(scale, offsetX, offsetY, x, y, width, height, color)
-        return
-    end
-
-    local screenX = offsetX + x * scale
-    local screenY = offsetY + y * scale
-    local screenWidth = width * scale
-    local screenHeight = height * scale
-    local screenRadius = radius * scale
-
-    dxDrawRectangle(screenX + screenRadius, screenY, screenWidth - screenRadius * 2, screenHeight, color, true)
-    dxDrawRectangle(screenX, screenY + screenRadius, screenWidth, screenHeight - screenRadius * 2, color, true)
-
-    dxDrawCircle(screenX + screenRadius, screenY + screenRadius, screenRadius, 180, 270, color, color, 16, true)
-    dxDrawCircle(screenX + screenWidth - screenRadius, screenY + screenRadius, screenRadius, 270, 360, color, color, 16, true)
-    dxDrawCircle(screenX + screenWidth - screenRadius, screenY + screenHeight - screenRadius, screenRadius, 0, 90, color, color, 16, true)
-    dxDrawCircle(screenX + screenRadius, screenY + screenHeight - screenRadius, screenRadius, 90, 180, color, color, 16, true)
-end
-
-local function dxLine(scale, offsetX, offsetY, x1, y1, x2, y2, color, width)
-    dxDrawLine(
-        offsetX + x1 * scale,
-        offsetY + y1 * scale,
-        offsetX + x2 * scale,
-        offsetY + y2 * scale,
-        color,
-        (width or 1) * scale,
-        true
-    )
-end
-
-local function dxText(scale, offsetX, offsetY, text, x, y, width, height, color, size, font, align, vertical, wordBreak)
-    local fontScale = ((size or 10) / 10) * scale
-
-    dxDrawText(
-        tostring(text or ""),
-        offsetX + x * scale,
-        offsetY + y * scale,
-        offsetX + (x + width) * scale,
-        offsetY + (y + height) * scale,
-        color,
-        fontScale,
-        font or "default",
-        align or "left",
-        vertical or "center",
-        false,
-        wordBreak or false,
-        true,
-        false,
-        false
-    )
-end
-
-local function dxContains(x, y, width, height, cursorX, cursorY)
-    return cursorX >= x
-        and cursorX <= x + width
-        and cursorY >= y
-        and cursorY <= y + height
-end
-
-local function getDxCursor(scale, offsetX, offsetY)
-    local cursorX, cursorY = getCursorPosition()
-
-    if not cursorX or not cursorY then
-        return nil, nil
-    end
-
-    return (cursorX * screenW - offsetX) / scale,
-        (cursorY * screenH - offsetY) / scale
-end
-
-local function normalizeDxKey(key)
-    key = tostring(key or ""):lower()
-
-    local aliases = {
-        ["bracketleft"] = "[",
-        ["bracketright"] = "]",
-        ["escape"] = "escape",
-        ["backspace"] = "backspace",
-        ["delete"] = "delete",
-        ["enter"] = "enter",
-        [" "] = "space",
-        ["shift"] = "lshift",
-        ["control"] = "lctrl",
-        ["alt"] = "lalt"
-    }
-
-    return aliases[key] or key
-end
-
-local function setDxActionKey(actionId, key)
-    local action = dxActions[actionId]
-
-    if not action then
-        return
-    end
-
-    key = normalizeDxKey(key)
-
-    if action.boundKey and action.bindFn then
-        unbindKey(action.boundKey, "down", action.bindFn)
-        action.boundKey = nil
-    end
-
-    if key == "escape"
-        or key == "backspace"
-        or key == "delete"
-        or key == ""
-    then
-        action.key = nil
-        outputChatBox("Бинд удален", 255, 120, 0)
-    else
-        action.key = key
-        action.boundKey = key
-        bindKey(key, "down", action.bindFn)
-        outputChatBox("Забинджено на: " .. string.upper(key), 0, 255, 0)
-    end
-end
-
-local function getDxQuickActions(tabName)
-    local result = {}
-
-    for _, action in ipairs(dxActionLists[tabName] or {}) do
-        if not action.metadata or not action.metadata.kind then
-            table.insert(result, action)
-        end
-    end
-
-    return result
-end
-
-local function getDxActionLayout(index, topY, cardWidth, cardHeight, gap, scroll)
-    local column = (index - 1) % 3
-    local row = math.floor((index - 1) / 3)
-
-    return 230 + column * (cardWidth + gap),
-        topY + row * (cardHeight + gap) - scroll
-end
-
-local function drawDxActionCards(actions, topY, cardHeight, scroll, maxBottom)
-    local scale, offsetX, offsetY = getDxMetrics()
-    local cursorX, cursorY = getDxCursor(scale, offsetX, offsetY)
-    local cardWidth = 260
-    local gap = 10
-
-    for index, action in ipairs(actions) do
-        local x, y = getDxActionLayout(index, topY, cardWidth, cardHeight, gap, scroll)
-
-        if y + cardHeight >= topY and y <= maxBottom then
-            local hovered = cursorX
-                and cursorY
-                and dxContains(x, y, cardWidth, cardHeight, cursorX, cursorY)
-
-            dxRoundedRect(
-                scale,
-                offsetX,
-                offsetY,
-                x,
-                y,
-                cardWidth,
-                cardHeight,
-                8,
-                hovered and DX_COLOR.surfaceHover or DX_COLOR.surface
-            )
-
-            dxRect(scale, offsetX, offsetY, x, y, 3, cardHeight, DX_COLOR.blue)
-            dxText(scale, offsetX, offsetY, action.name, x + 12, y + 8, cardWidth - 62, cardHeight - 16, DX_COLOR.text, 10, "default-bold", "left", "center", true)
-
-            local keyText = action.key and string.upper(action.key) or "—"
-            dxRoundedRect(scale, offsetX, offsetY, x + cardWidth - 46, y + 12, 34, cardHeight - 24, 6, DX_COLOR.header)
-            dxText(scale, offsetX, offsetY, keyText, x + cardWidth - 44, y + 12, 30, cardHeight - 24, DX_COLOR.blue, 8, "default-bold", "center", "center")
-        end
-    end
-end
-
-local function getDxActionAt(actions, topY, cardHeight, scroll, cursorX, cursorY)
-    local cardWidth = 260
-    local gap = 10
-
-    for index, action in ipairs(actions) do
-        local x, y = getDxActionLayout(index, topY, cardWidth, cardHeight, gap, scroll)
-
-        if dxContains(x, y, cardWidth, cardHeight, cursorX, cursorY) then
-            return action, cursorX >= x + cardWidth - 55
-        end
-    end
-
-    return nil, false
-end
-
-local function drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
-    dxRoundedRect(scale, offsetX, offsetY, 0, 0, 200, DX_BASE_H, 18, DX_COLOR.sidebar)
-    dxLine(scale, offsetX, offsetY, 199, 0, 199, DX_BASE_H, DX_COLOR.line)
-
-    dxRoundedRect(scale, offsetX, offsetY, 25, 24, 30, 30, 8, DX_COLOR.surfaceHover)
-    dxText(scale, offsetX, offsetY, "M", 25, 24, 30, 30, DX_COLOR.blue, 13, "default-bold", "center", "center")
-    dxText(scale, offsetX, offsetY, "MR.LOREM", 67, 22, 110, 15, DX_COLOR.text, 11, "default-bold")
-    dxText(scale, offsetX, offsetY, "DIRECTX CONTROL", 67, 38, 110, 12, DX_COLOR.muted, 7, "default")
-
-    local menu = {
-        { id = "actions", title = "Быстрые действия", icon = "◈" },
-        { id = "jobs", title = "Работы", icon = "▣" },
-        { id = "fly", title = "Настройки Fly", icon = "△" }
-    }
-
-    for index, item in ipairs(menu) do
-        local y = 85 + (index - 1) * 45
-        local selected = dxTab == item.id
-        local hovered = cursorX and cursorY and dxContains(15, y, 170, 36, cursorX, cursorY)
-
-        dxRoundedRect(
-            scale,
-            offsetX,
-            offsetY,
-            15,
-            y,
-            170,
-            36,
-            8,
-            selected and DX_COLOR.surfaceHover or (hovered and DX_COLOR.surface or DX_COLOR.sidebar)
-        )
-
-        dxText(scale, offsetX, offsetY, item.icon, 27, y, 18, 36, selected and DX_COLOR.blue or DX_COLOR.muted, 11, "default-bold", "center", "center")
-        dxText(scale, offsetX, offsetY, item.title, 55, y, 120, 36, selected and DX_COLOR.text or DX_COLOR.muted, 9, "default-bold", "left", "center")
-    end
-
-    dxRoundedRect(scale, offsetX, offsetY, 22, 575, 156, 49, 10, tocolor(87, 228, 157, 18))
-    dxText(scale, offsetX, offsetY, "●  SYSTEM ONLINE", 34, 582, 135, 14, DX_COLOR.green, 8, "default-bold")
-    dxText(scale, offsetX, offsetY, "Панель готова · F9", 34, 599, 135, 14, DX_COLOR.muted, 8, "default")
-end
-
-local function drawDxHeader(scale, offsetX, offsetY)
-    dxRoundedRect(scale, offsetX, offsetY, 200, 0, 880, 70, 16, DX_COLOR.header)
-    dxLine(scale, offsetX, offsetY, 200, 69, 1080, 69, DX_COLOR.line)
-
-    dxText(scale, offsetX, offsetY, "COMMAND CENTER / 01", 230, 16, 300, 14, DX_COLOR.blue, 8, "default-bold")
-    dxText(scale, offsetX, offsetY, "Управление игроком", 230, 31, 400, 25, DX_COLOR.text, 16, "default-bold")
-    dxText(scale, offsetX, offsetY, "03den", 990, 20, 45, 14, DX_COLOR.muted, 9, "default", "right")
-    dxRoundedRect(scale, offsetX, offsetY, 1045, 18, 26, 26, 8, DX_COLOR.purple)
-    dxText(scale, offsetX, offsetY, "D", 1045, 18, 26, 26, DX_COLOR.white, 9, "default-bold", "center", "center")
-    dxText(scale, offsetX, offsetY, "×", 1013, 18, 24, 26, DX_COLOR.muted, 16, "default-bold", "center", "center")
-end
-
-local function drawDxFooter(scale, offsetX, offsetY)
-    dxRoundedRect(scale, offsetX, offsetY, 200, 625, 880, 25, 10, DX_COLOR.header)
-    dxLine(scale, offsetX, offsetY, 200, 625, 1080, 625, DX_COLOR.line)
-    dxText(scale, offsetX, offsetY, "DXDRAW / UI CONCEPT", 230, 630, 250, 13, DX_COLOR.muted, 7, "default-bold")
-    dxText(scale, offsetX, offsetY, "ESC закрывает · клик по клавише меняет бинд", 760, 630, 290, 13, DX_COLOR.muted, 7, "default", "right")
-end
-
-local function drawDxActionsPage(scale, offsetX, offsetY, cursorX, cursorY)
-    local actions = getDxQuickActions("fun")
-    local maxBottom = 615
-
-    dxText(scale, offsetX, offsetY, "Быстрые действия", 230, 87, 400, 22, DX_COLOR.text, 14, "default-bold")
-    dxText(scale, offsetX, offsetY, "Все основные функции доступны в один клик.", 230, 109, 420, 16, DX_COLOR.muted, 9, "default")
-    dxText(scale, offsetX, offsetY, "KEY STATUS: READY", 895, 99, 155, 16, DX_COLOR.green, 8, "default-bold", "right")
-
-    drawDxActionCards(actions, 135, 58, dxScroll.fun, maxBottom)
-end
-
-local function drawDxJobsPage(scale, offsetX, offsetY, cursorX, cursorY)
-    local quickActions = getDxQuickActions("jobs")
-    local quickCardHeight = 47
-    local quickGap = 9
-    local quickRows = math.max(1, math.ceil(#quickActions / 3))
-    local directoryTop = 112 + quickRows * (quickCardHeight + quickGap) + 27
-    local directoryRowHeight = 39
-    local cursor = cursorX and cursorY
-
-    dxText(scale, offsetX, offsetY, "Работы", 230, 87, 400, 22, DX_COLOR.text, 14, "default-bold")
-    dxText(scale, offsetX, offsetY, "Выбор профессии и увольнение одним нажатием.", 230, 109, 450, 16, DX_COLOR.muted, 9, "default")
-    dxText(scale, offsetX, offsetY, autoMode and "AUTO FARM: ON" or "AUTO FARM: OFF", 895, 99, 155, 16, autoMode and DX_COLOR.green or DX_COLOR.red, 8, "default-bold", "right")
-
-    drawDxActionCards(quickActions, 112, quickCardHeight, 0, directoryTop - 12)
-
-    dxLine(scale, offsetX, offsetY, 230, directoryTop - 3, 1050, directoryTop - 3, DX_COLOR.line)
-    dxText(scale, offsetX, offsetY, "Справочник профессий", 230, directoryTop + 7, 300, 18, DX_COLOR.text, 11, "default-bold")
-    dxText(scale, offsetX, offsetY, "название · уровень · место · увольнение", 760, directoryTop + 8, 290, 16, DX_COLOR.muted, 8, "default", "right")
-
-    local listTop = directoryTop + 35
-
-    for index, job in ipairs(dxJobs) do
-        local y = listTop + (index - 1) * directoryRowHeight - dxScroll.jobs
-
-        if y + directoryRowHeight >= listTop and y <= 615 then
-            local hovered = cursor
-                and dxContains(230, y, 820, directoryRowHeight, cursorX, cursorY)
-
-            dxRoundedRect(scale, offsetX, offsetY, 230, y, 820, directoryRowHeight, 7, hovered and DX_COLOR.surfaceHover or DX_COLOR.surface)
-            dxRect(scale, offsetX, offsetY, 230, y, 3, directoryRowHeight, DX_COLOR.purple)
-
-            dxText(scale, offsetX, offsetY, job.name, 245, y + 3, 245, 16, DX_COLOR.text, 9, "default-bold")
-            dxText(scale, offsetX, offsetY, "лвл " .. tostring(job.level), 245, y + 19, 245, 13, DX_COLOR.blue, 7, "default")
-            dxText(scale, offsetX, offsetY, job.location, 500, y + 1, 430, 36, DX_COLOR.muted, 8, "default", "left", "center", true)
-
-            dxRoundedRect(scale, offsetX, offsetY, 955, y + 7, 84, 25, 6, tocolor(255, 113, 134, 22))
-            dxText(scale, offsetX, offsetY, "Уволиться", 955, y + 7, 84, 25, DX_COLOR.red, 7, "default-bold", "center", "center")
-        end
-    end
-end
-
-local function drawDxFlyPage(scale, offsetX, offsetY)
-    if not dxEditingField then
-        dxFlyValues.playerSpeed = string.format("%.2f", flyConfig.playerSpeed)
-        dxFlyValues.playerBoost = string.format("%.2f", flyConfig.playerBoost)
-        dxFlyValues.carSpeed = string.format("%.2f", flyConfig.carSpeed)
-        dxFlyValues.carBoost = string.format("%.2f", flyConfig.carBoost)
-    end
-
-    if not dxFlyChecksDirty then
-        dxFlyChecks.hidePlayer = flyConfig.hidePlayer
-        dxFlyChecks.hideVehicle = flyConfig.hideVehicle
-        dxFlyChecks.disableCarCollisions = flyConfig.disableCarCollisions
-    end
-
-    dxText(scale, offsetX, offsetY, "Настройки Fly", 230, 87, 400, 22, DX_COLOR.text, 14, "default-bold")
-    dxText(scale, offsetX, offsetY, "Параметры движения и видимости.", 230, 109, 400, 16, DX_COLOR.muted, 9, "default")
-
-    local fields = {
-        { id = "playerSpeed", label = "Скорость персонажа", x = 230, y = 145 },
-        { id = "playerBoost", label = "Ускорение Shift", x = 650, y = 145 },
-        { id = "carSpeed", label = "Скорость машины", x = 230, y = 205 },
-        { id = "carBoost", label = "Ускорение машины", x = 650, y = 205 }
-    }
-
-    for _, field in ipairs(fields) do
-        dxText(scale, offsetX, offsetY, field.label, field.x, field.y, 230, 30, DX_COLOR.muted, 9, "default", "left", "center")
-
-        local active = dxEditingField == field.id
-        dxRoundedRect(scale, offsetX, offsetY, field.x + 245, field.y, 105, 30, 6, active and DX_COLOR.surfaceHover or DX_COLOR.surface)
-        dxText(scale, offsetX, offsetY, dxFlyValues[field.id], field.x + 253, field.y, 89, 30, DX_COLOR.text, 10, "default", "right", "center")
-    end
-
-    local checks = {
-        { id = "hidePlayer", label = "Скрывать персонажа во время Fly", y = 280 },
-        { id = "hideVehicle", label = "Скрывать машину во время FlyCar", y = 315 },
-        { id = "disableCarCollisions", label = "Отключать столкновения машины", y = 350 }
-    }
-
-    for _, check in ipairs(checks) do
-        dxRoundedRect(scale, offsetX, offsetY, 230, check.y + 8, 16, 16, 4, DX_COLOR.surface)
-
-        if dxFlyChecks[check.id] then
-            dxRoundedRect(scale, offsetX, offsetY, 234, check.y + 12, 8, 8, 2, DX_COLOR.blue)
-        end
-
-        dxText(scale, offsetX, offsetY, check.label, 258, check.y, 450, 30, DX_COLOR.muted, 9, "default", "left", "center")
-    end
-
-    dxRoundedRect(scale, offsetX, offsetY, 230, 405, 195, 35, 8, DX_COLOR.blue)
-    dxText(scale, offsetX, offsetY, "Применить настройки", 230, 405, 195, 35, DX_COLOR.white, 9, "default-bold", "center", "center")
-end
-
-local function drawDxUi()
-    if not dxVisible then
-        return
-    end
-
-    local scale, offsetX, offsetY = getDxMetrics()
-
-    if dxDragging then
-        local cursorX, cursorY = getCursorPosition()
-
-        if cursorX and cursorY then
-            local absoluteX = cursorX * screenW
-            local absoluteY = cursorY * screenH
-            local centeredX = (screenW - DX_BASE_W * scale) / 2
-            local centeredY = (screenH - DX_BASE_H * scale) / 2
-
-            dxWindowX = (absoluteX - centeredX - dxDragOffsetX) / scale
-            dxWindowY = (absoluteY - centeredY - dxDragOffsetY) / scale
-            clampDxWindowPosition(scale)
-
-            scale, offsetX, offsetY = getDxMetrics()
-        end
-    end
-
-    local cursorX, cursorY = getDxCursor(scale, offsetX, offsetY)
-
-    dxRect(1, 0, 0, 0, 0, screenW, screenH, DX_COLOR.overlay)
-    dxRoundedRect(scale, offsetX, offsetY, 0, 0, DX_BASE_W, DX_BASE_H, 18, DX_COLOR.background)
-
-    drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
-    drawDxHeader(scale, offsetX, offsetY)
-    drawDxFooter(scale, offsetX, offsetY)
-
-    if dxTab == "actions" then
-        drawDxActionsPage(scale, offsetX, offsetY, cursorX, cursorY)
-    elseif dxTab == "jobs" then
-        drawDxJobsPage(scale, offsetX, offsetY, cursorX, cursorY)
-    else
-        drawDxFlyPage(scale, offsetX, offsetY)
-    end
-end
-
-local function executeDxAction(action)
-    if action and action.fn then
-        action.fn()
-    end
-end
-
-local function applyDxFly()
-    applyFlySettings(
-        dxFlyValues.playerSpeed,
-        dxFlyValues.playerBoost,
-        dxFlyValues.carSpeed,
-        dxFlyValues.carBoost,
-        dxFlyChecks.hidePlayer,
-        dxFlyChecks.hideVehicle,
-        dxFlyChecks.disableCarCollisions
-    )
-
-    dxEditingField = nil
-    dxFlyChecksDirty = false
-end
-
-local function handleDxJobClick(cursorX, cursorY)
-    local quickActions = getDxQuickActions("jobs")
-    local quickCardHeight = 47
-    local quickGap = 9
-    local quickRows = math.max(1, math.ceil(#quickActions / 3))
-    local directoryTop = 112 + quickRows * (quickCardHeight + quickGap) + 27
-    local directoryRowHeight = 39
-    local listTop = directoryTop + 35
-
-    local action, isBind = getDxActionAt(quickActions, 112, quickCardHeight, 0, cursorX, cursorY)
-
-    if action then
-        if isBind then
-            waitingForBind = action.id
-            outputChatBox("Нажмите клавишу для нового бинда или ESC для отмены.", 255, 220, 0)
-        else
-            executeDxAction(action)
-        end
-        return true
-    end
-
-    for index, job in ipairs(dxJobs) do
-        local y = listTop + (index - 1) * directoryRowHeight - dxScroll.jobs
-
-        if dxContains(230, y, 820, directoryRowHeight, cursorX, cursorY) then
-            if dxContains(230, y, 265, directoryRowHeight, cursorX, cursorY) then
-                executeDxAction(dxActions[job.startId])
-                return true
-            elseif dxContains(950, y, 105, directoryRowHeight, cursorX, cursorY) then
-                executeDxAction(dxActions[job.stopId])
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
-local function handleDxClick(button, state, absoluteX, absoluteY)
-    if button == "left" and state == "up" then
-        dxDragging = false
-        return
-    end
-
-    if button ~= "left" or state ~= "down" or not dxVisible then
-        return
-    end
-
-    local scale, offsetX, offsetY = getDxMetrics()
-    local cursorX = (absoluteX - offsetX) / scale
-    local cursorY = (absoluteY - offsetY) / scale
-
-    if dxContains(1028, 16, 30, 30, cursorX, cursorY) then
-        toggleDxUi()
-        cancelEvent()
-        return
-    end
-
-    if dxContains(200, 0, 820, 70, cursorX, cursorY) then
-        dxDragging = true
-        dxDragOffsetX = absoluteX - offsetX
-        dxDragOffsetY = absoluteY - offsetY
-        cancelEvent()
-        return
-    end
-
-    if dxContains(15, 85, 170, 36, cursorX, cursorY) then
-        dxTab = "actions"
-        dxScroll.fun = 0
-        cancelEvent()
-        return
-    elseif dxContains(15, 130, 170, 36, cursorX, cursorY) then
-        dxTab = "jobs"
-        dxScroll.jobs = 0
-        cancelEvent()
-        return
-    elseif dxContains(15, 175, 170, 36, cursorX, cursorY) then
-        dxTab = "fly"
-        dxEditingField = nil
-        cancelEvent()
-        return
-    end
-
-    if dxTab == "actions" then
-        local action, isBind = getDxActionAt(
-            getDxQuickActions("fun"),
-            135,
-            58,
-            dxScroll.fun,
-            cursorX,
-            cursorY
-        )
-
-        if action then
-            if isBind then
-                waitingForBind = action.id
-                outputChatBox("Нажмите клавишу для нового бинда или ESC для отмены.", 255, 220, 0)
-            else
-                executeDxAction(action)
-            end
-            cancelEvent()
-        end
-    elseif dxTab == "jobs" then
-        if handleDxJobClick(cursorX, cursorY) then
-            cancelEvent()
-        end
-    elseif dxTab == "fly" then
-        local fields = {
-            { id = "playerSpeed", x = 230, y = 145 },
-            { id = "playerBoost", x = 650, y = 145 },
-            { id = "carSpeed", x = 230, y = 205 },
-            { id = "carBoost", x = 650, y = 205 }
-        }
-
-        for _, field in ipairs(fields) do
-            if dxContains(field.x + 245, field.y, 105, 30, cursorX, cursorY) then
-                dxEditingField = field.id
-                waitingForBind = nil
-                cancelEvent()
-                return
-            end
-        end
-
-        local checks = {
-            { id = "hidePlayer", y = 280 },
-            { id = "hideVehicle", y = 315 },
-            { id = "disableCarCollisions", y = 350 }
-        }
-
-        for _, check in ipairs(checks) do
-            if dxContains(230, check.y, 460, 30, cursorX, cursorY) then
-                dxFlyChecks[check.id] = not dxFlyChecks[check.id]
-                dxFlyChecksDirty = true
-                cancelEvent()
-                return
-            end
-        end
-
-        if dxContains(230, 405, 195, 35, cursorX, cursorY) then
-            applyDxFly()
-            cancelEvent()
-        end
-    end
-end
-
-local function handleDxCharacter(character)
-    if not dxVisible or not dxEditingField then
-        return
-    end
-
-    if character and string.match(character, "[%d%.]") then
-        if character == "." and string.find(dxFlyValues[dxEditingField], "%.", 1, true) then
-            return
-        end
-
-        dxFlyValues[dxEditingField] = dxFlyValues[dxEditingField] .. character
-    end
-end
-
-local function handleDxKey(button, press)
-    if not press then
-        return
-    end
-
-    if waitingForBind then
-        cancelEvent()
-
-        local action = dxActions[waitingForBind]
-
-        if not action then
-            waitingForBind = nil
-            return
-        end
-
-        if button == "escape" then
-            waitingForBind = nil
-            outputChatBox("Изменение бинда отменено.", 255, 220, 0)
-        elseif button == "backspace" or button == "delete" then
-            setDxActionKey(action.id, "")
-            waitingForBind = nil
-        else
-            setDxActionKey(action.id, button)
-            waitingForBind = nil
-        end
-
-        return
-    end
-
-    if dxEditingField then
-        if button == "backspace" then
-            local value = dxFlyValues[dxEditingField]
-            dxFlyValues[dxEditingField] = string.sub(value, 1, math.max(0, #value - 1))
-            cancelEvent()
-            return
-        elseif button == "enter" or button == "escape" then
-            dxEditingField = nil
-            cancelEvent()
-            return
-        end
-    end
-
-    if not dxVisible then
-        return
-    end
-
-    if button == "escape" then
-        toggleDxUi()
-        cancelEvent()
-    elseif button == "mouse_wheel_up" and dxScroll[dxTab] then
-        dxScroll[dxTab] = math.max(0, dxScroll[dxTab] - 45)
-        cancelEvent()
-    elseif button == "mouse_wheel_down" and dxScroll[dxTab] then
-        dxScroll[dxTab] = dxScroll[dxTab] + 45
-        cancelEvent()
-    end
-end
-
-function toggleDxUi()
-    dxVisible = not dxVisible
-    showCursor(dxVisible)
-
-    if not dxVisible then
-        waitingForBind = nil
-        dxEditingField = nil
-        dxDragging = false
-    end
-end
-
-addEventHandler("onClientRender", root, drawDxUi)
-cacheEvent("dxRender", drawDxUi)
-
-addEventHandler("onClientClick", root, handleDxClick)
-cacheEvent("dxClick", handleDxClick)
-
-addEventHandler("onClientCharacter", root, handleDxCharacter)
-cacheEvent("dxCharacter", handleDxCharacter)
-
-addEventHandler("onClientKey", root, handleDxKey)
-_G.GH_Cache.keyHandler = handleDxKey
-
-outputChatBox("[Engine] #00FF00Скрипт полностью загружен! DirectX UI готов.", 255, 255, 255, true)
+outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
 
