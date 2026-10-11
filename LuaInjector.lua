@@ -1428,42 +1428,70 @@ function gasz()
 end
 cacheEvent("gasz", gasz)
 
+local cachedWaypoint = nil
+local nextWaypointScan = 0
+local WAYPOINT_SCAN_INTERVAL = 300
+
 function avtobus()
-    if not autoMode then return end
-    
-    local veh = getPedOccupiedVehicle(localPlayer)
-    if not isElement(veh) then 
-        if isTimer(autoTimer) then killTimer(autoTimer) end
-        autoMode = false
-        return 
+    if not autoMode then
+        return
     end
 
+    local veh = getPedOccupiedVehicle(localPlayer)
+
+    if not isElement(veh) then
+        if isTimer(autoTimer) then
+            killTimer(autoTimer)
+            autoTimer = nil
+        end
+
+        autoMode = false
+        cachedWaypoint = nil
+        return
+    end
+
+    -- Ремонт автомобиля
     if getElementHealth(veh) < 950 then
         fixVehicle(veh)
     end
-    
+
+    -- Отключаем столкновения
     if getElementCollisionsEnabled(veh) then
         setElementCollisionsEnabled(veh, false)
     end
 
-    local waypoint = false
-    local blips = getElementsByType("blip")
-    for i = 1, #blips do
-        if getBlipIcon(blips[i]) == 41 then 
-            waypoint = blips[i]
-            break 
+    -- Обновляем waypoint не каждый тик, а раз в 300 мс
+    local now = getTickCount()
+
+    if not isElement(cachedWaypoint) or now >= nextWaypointScan then
+        cachedWaypoint = nil
+        nextWaypointScan = now + WAYPOINT_SCAN_INTERVAL
+
+        for _, blip in ipairs(getElementsByType("blip")) do
+            if getBlipIcon(blip) == 41 then
+                cachedWaypoint = blip
+                break
+            end
         end
     end
 
-    if waypoint then
-        local wx, wy, wz = getElementPosition(waypoint)
-        local px, py, pz = getElementPosition(veh)
-        local dist = getDistanceBetweenPoints3D(px, py, pz, wx, wy, wz)
-        
-        if dist > 2 then
-            setElementVelocity(veh, 0, 0, 0)
-            setElementPosition(veh, wx, wy, wz + 1.0)
-        end
+    if not isElement(cachedWaypoint) then
+        return
+    end
+
+    local wx, wy, wz = getElementPosition(cachedWaypoint)
+    local px, py, pz = getElementPosition(veh)
+
+    local dx = wx - px
+    local dy = wy - py
+    local dz = wz - pz
+
+    -- Проверка расстояния без getDistanceBetweenPoints3D
+    local distanceSquared = dx * dx + dy * dy + dz * dz
+
+    if distanceSquared > 4 then
+        setElementVelocity(veh, 0, 0, 0)
+        setElementPosition(veh, wx, wy, wz + 1.0)
     end
 end
 
