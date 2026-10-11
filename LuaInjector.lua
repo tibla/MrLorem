@@ -356,58 +356,131 @@ local function teleportEntity(entity, x, y, z)
     end
 end
 
+local teleportLoadTimer = nil
+local TELEPORT_LOAD_DELAY = 300
+
+local function cancelTeleportLoad()
+    if isTimer(teleportLoadTimer) then
+        killTimer(teleportLoadTimer)
+        teleportLoadTimer = nil
+    end
+end
+
+local function getTeleportEntity()
+    local vehicle = getPedOccupiedVehicle(localPlayer)
+
+    if isElement(vehicle) then
+        return vehicle
+    end
+
+    return localPlayer
+end
+
+local function preloadAndTeleport(x, y, z, finalZ)
+    cancelTeleportLoad()
+
+    -- Предварительно загружаем модели и коллизии области
+    if type(enginePreloadWorldArea) == "function" then
+        enginePreloadWorldArea(x, y, z, "all")
+    end
+
+    if not finalZ then
+        local groundZ = getGroundPosition(x, y, z + 1000)
+
+        if groundZ and groundZ > 0 then
+            finalZ = groundZ + 1
+        else
+            finalZ = z + 5
+        end
+    end
+
+    local entity = getTeleportEntity()
+
+    if not isElement(entity) then
+        return
+    end
+
+    -- Сначала переносим немного выше земли,
+    -- чтобы объект успел прогрузиться без проваливания
+    setElementVelocity(entity, 0, 0, 0)
+    setElementPosition(entity, x, y, finalZ + 50)
+
+    teleportLoadTimer = setTimer(function()
+        teleportLoadTimer = nil
+
+        local currentEntity = getTeleportEntity()
+
+        if not isElement(currentEntity) then
+            return
+        end
+
+        setElementVelocity(currentEntity, 0, 0, 0)
+        setElementPosition(currentEntity, x, y, finalZ)
+    end, TELEPORT_LOAD_DELAY, 1)
+end
+
 function teleportToWaypoint()
-    local waypoint = false
-    for _, v in ipairs(getElementsByType("blip")) do
-        if getBlipIcon(v) == 41 then
-            waypoint = v
+    local waypoint = nil
+
+    for _, blip in ipairs(getElementsByType("blip")) do
+        if getBlipIcon(blip) == 41 then
+            waypoint = blip
             break
         end
     end
 
     if not waypoint then
-        outputChatBox("Поставь метку на карте (ПКМ)")
+        outputChatBox("Поставь метку на карте (ПКМ)", 255, 200, 0)
         return
     end
 
     local x, y, z = getElementPosition(waypoint)
-    local safeZ = nil
-    local startZ = 1000
 
-    for i = startZ, 0, -25 do
-        local gz = getGroundPosition(x, y, i)
-        if gz and gz > 0 then
-            safeZ = gz + 1
-            break
-        end
-    end
+    preloadAndTeleport(x, y, z)
 
-    if not safeZ then safeZ = z + 5 end
-
-    if localPlayer.vehicle then
-        setElementPosition(localPlayer.vehicle, x, y, safeZ + 50)
-    else
-        setElementPosition(localPlayer, x, y, safeZ + 50)
-    end
-
-    setTimer(function()
-        if localPlayer.vehicle then
-            setElementPosition(localPlayer.vehicle, x, y, safeZ)
-        else
-            setElementPosition(localPlayer, x, y, safeZ)
-        end
-    end, 200, 1)
+    outputChatBox(
+        "[Engine] Область перед телепортом загружается...",
+        0,
+        255,
+        0
+    )
 end
 
 function tpTake()
-    teleportEntity(localPlayer, 483.034, -1004.596, 21.436)
-    outputChatBox("[Engine] #00FF00ТП на точку 'Взять' (с машиной)!", 255, 255, 255, true)
+    preloadAndTeleport(
+        483.034,
+        -1004.596,
+        21.436,
+        21.436
+    )
+
+    outputChatBox(
+        "[Engine] #00FF00ТП на точку 'Взять' (с машиной)!",
+        255,
+        255,
+        255,
+        true
+    )
 end
 
 function tpPut()
-    teleportEntity(localPlayer, 776.723, -1581.878, 47.749)
-    outputChatBox("[Engine] #00FF00ТП на точку 'Положить' (с машиной)!", 255, 255, 255, true)
+    preloadAndTeleport(
+        776.723,
+        -1581.878,
+        47.749,
+        47.749
+    )
+
+    outputChatBox(
+        "[Engine] #00FF00ТП на точку 'Положить' (с машиной)!",
+        255,
+        255,
+        255,
+        true
+    )
 end
+
+
 function rielt()
     triggerServerEvent ( "PlayerEnterToRealtor", root, 1 )
     outputChatBox("[Engine] #00FF00ТП на rielt", 255, 255, 255, true)
@@ -1428,12 +1501,51 @@ function gasz()
 end
 cacheEvent("gasz", gasz)
 
-local cachedWaypoint = nil
-local nextWaypointScan = 0
-local WAYPOINT_SCAN_INTERVAL = 300
+local avtobusWaypoint = nil
+local avtobusNextScan = 0
+local avtobusPreloadTimer = nil
+local avtobusPreloadPending = false
+local avtobusLastPreload = nil
+
+local WAYPOINT_SCAN_TIME = 300
+local PRELOAD_DELAY = 150
+
+local function stopAvtobusPreload()
+    if isTimer(avtobusPreloadTimer) then
+        killTimer(avtobusPreloadTimer)
+    end
+
+    avtobusPreloadTimer = nil
+    avtobusPreloadPending = false
+end
+
+local function teleportAvtobusVehicle(vehicle)
+    if not autoMode or not isElement(vehicle) then
+        return
+    end
+
+    if not isElement(avtobusWaypoint) then
+        return
+    end
+
+    local wx, wy, wz = getElementPosition(avtobusWaypoint)
+    local px, py, pz = getElementPosition(vehicle)
+
+    local dx = wx - px
+    local dy = wy - py
+    local dz = wz - pz
+
+    if dx * dx + dy * dy + dz * dz <= 9 then
+        return
+    end
+
+    setElementVelocity(vehicle, 0, 0, 0)
+    setElementPosition(vehicle, wx, wy, wz + 1.0)
+end
 
 function avtobus()
     if not autoMode then
+        stopAvtobusPreload()
         return
     end
 
@@ -1445,54 +1557,97 @@ function avtobus()
             autoTimer = nil
         end
 
+        stopAvtobusPreload()
+        avtobusWaypoint = nil
+        avtobusLastPreload = nil
         autoMode = false
-        cachedWaypoint = nil
         return
     end
 
-    -- Ремонт автомобиля
     if getElementHealth(veh) < 950 then
         fixVehicle(veh)
     end
 
-    -- Отключаем столкновения
     if getElementCollisionsEnabled(veh) then
         setElementCollisionsEnabled(veh, false)
     end
 
-    -- Обновляем waypoint не каждый тик, а раз в 300 мс
     local now = getTickCount()
 
-    if not isElement(cachedWaypoint) or now >= nextWaypointScan then
-        cachedWaypoint = nil
-        nextWaypointScan = now + WAYPOINT_SCAN_INTERVAL
+    -- Ищем новый waypoint только раз в 300 мс
+    if not isElement(avtobusWaypoint) or now >= avtobusNextScan then
+        avtobusWaypoint = nil
+        avtobusNextScan = now + WAYPOINT_SCAN_TIME
 
         for _, blip in ipairs(getElementsByType("blip")) do
             if getBlipIcon(blip) == 41 then
-                cachedWaypoint = blip
+                avtobusWaypoint = blip
                 break
             end
         end
     end
 
-    if not isElement(cachedWaypoint) then
+    if not isElement(avtobusWaypoint) then
         return
     end
 
-    local wx, wy, wz = getElementPosition(cachedWaypoint)
+    local wx, wy, wz = getElementPosition(avtobusWaypoint)
     local px, py, pz = getElementPosition(veh)
 
     local dx = wx - px
     local dy = wy - py
     local dz = wz - pz
 
-    -- Проверка расстояния без getDistanceBetweenPoints3D
     local distanceSquared = dx * dx + dy * dy + dz * dz
 
-    if distanceSquared > 4 then
-        setElementVelocity(veh, 0, 0, 0)
-        setElementPosition(veh, wx, wy, wz + 1.0)
+    if distanceSquared <= 9 then
+        return
     end
+
+    -- Если функция доступна в MTA 1.6+, сначала прогружаем область
+    if type(enginePreloadWorldArea) == "function" then
+        local needPreload = true
+
+        if avtobusLastPreload then
+            local lx = wx - avtobusLastPreload.x
+            local ly = wy - avtobusLastPreload.y
+            local lz = wz - avtobusLastPreload.z
+
+            -- Не повторяем загрузку почти той же области
+            if lx * lx + ly * ly + lz * lz < 2500 then
+                needPreload = false
+            end
+        end
+
+        if needPreload and not avtobusPreloadPending then
+            enginePreloadWorldArea(wx, wy, wz, "all")
+
+            avtobusLastPreload = {
+                x = wx,
+                y = wy,
+                z = wz
+            }
+
+            avtobusPreloadPending = true
+
+            stopAvtobusPreload()
+
+            avtobusPreloadPending = true
+
+            avtobusPreloadTimer = setTimer(function()
+                avtobusPreloadTimer = nil
+                avtobusPreloadPending = false
+
+                if autoMode and isElement(veh) then
+                    teleportAvtobusVehicle(veh)
+                end
+            end, PRELOAD_DELAY, 1)
+
+            return
+        end
+    end
+
+    teleportAvtobusVehicle(veh)
 end
 
 function eskavator()
