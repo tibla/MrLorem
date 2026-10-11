@@ -7,10 +7,17 @@ _G.GH_Cache.binds = _G.GH_Cache.binds or {}
 _G.GH_Cache.gui = _G.GH_Cache.gui or {}
 _G.GH_Cache.timers = _G.GH_Cache.timers or {}
 
+-- Если ранее была загружена старая версия панели, аккуратно убираем её UI.
+if type(fullCleanup) == "function" then
+    pcall(fullCleanup)
+end
+
 local bindsData = {}
 local waitingForBind = nil
 local autoMode = false
 local autoTimer = nil
+local speedBoostTimer = nil
+local speedBoostActive = false
 
 local function cacheEvent(name, fn)
     _G.GH_Cache.events[name] = { root = root, fn = fn }
@@ -27,9 +34,13 @@ function fullCleanup()
     unbindKey("f9", "down")
     unbindKey("]", "down")
     unbindKey("lshift", "down")
+    unbindKey("lshift", "up")
     
     -- 3. Очищаем активные таймеры
     if isTimer(autoTimer) then killTimer(autoTimer) end
+    if isTimer(speedBoostTimer) then killTimer(speedBoostTimer) end
+    speedBoostTimer = nil
+    speedBoostActive = false
     for _, timer in pairs(_G.GH_Cache.timers) do
         if isTimer(timer) then killTimer(timer) end
     end
@@ -81,8 +92,11 @@ _G.GH_Cache.keyHandler = keyBindInterceptor
 -- ИНТЕРФЕЙС
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
-local windowW, windowH = 750, 720
-local x, y = (screenW - windowW) / 2, (screenH - windowH) / 2
+local windowW, windowH = 780, 600
+windowW = math.min(windowW, screenW - 40)
+windowH = math.min(windowH, screenH - 40)
+local x = math.max(20, (screenW - windowW) / 2)
+local y = math.max(20, (screenH - windowH) / 2)
 
 mainWin = guiCreateWindow(
     x,
@@ -94,14 +108,50 @@ mainWin = guiCreateWindow(
 )
 
 guiWindowSetSizable(mainWin, false)
+guiWindowSetMovable(mainWin, true)
 guiSetVisible(mainWin, false)
+
+local function setGuiPropertySafe(element, property, value)
+    pcall(guiSetProperty, element, property, value)
+end
+
+local function styleButton(button, accent)
+    guiSetFont(button, "default-small")
+    setGuiPropertySafe(button, "NormalTextColour", accent and "FF55B6FF" or "FFEAF2FF")
+    setGuiPropertySafe(button, "HoverTextColour", "FFFFFFFF")
+    setGuiPropertySafe(button, "PushedTextColour", "FF9AD5FF")
+end
+
+local headerLabel = guiCreateLabel(
+    20,
+    8,
+    windowW - 40,
+    18,
+    "Панель управления",
+    false,
+    mainWin
+)
+guiSetFont(headerLabel, "default-bold-small")
+guiLabelSetColor(headerLabel, 85, 182, 255)
+
+local statusLabel = guiCreateLabel(
+    20,
+    28,
+    windowW - 40,
+    17,
+    "F9 — открыть или закрыть меню    |    окно можно перетаскивать за заголовок",
+    false,
+    mainWin
+)
+guiSetFont(statusLabel, "default-small")
+guiLabelSetColor(statusLabel, 140, 160, 185)
 
 -- Создаём панель вкладок
 local tabPanel = guiCreateTabPanel(
-    10,
-    25,
-    windowW - 20,
-    windowH - 40,
+    12,
+    50,
+    windowW - 24,
+    windowH - 62,
     false,
     mainWin
 )
@@ -112,14 +162,27 @@ local tabFun = guiCreateTab(
     tabPanel
 )
 
-local scrollFun = guiCreateScrollPane(
-    5,
-    5,
-    windowW - 30,
-    windowH - 80,
+local funHint = guiCreateLabel(
+    15,
+    10,
+    windowW - 70,
+    20,
+    "Выберите действие. Кнопка справа меняет клавишу.",
     false,
     tabFun
 )
+guiSetFont(funHint, "default-small")
+guiLabelSetColor(funHint, 140, 160, 185)
+
+local scrollFun = guiCreateScrollPane(
+    10,
+    38,
+    windowW - 44,
+    windowH - 118,
+    false,
+    tabFun
+)
+guiScrollPaneSetScrollBars(scrollFun, false, true)
 local colY = {
     left = 10,
     center = 10,
@@ -127,9 +190,9 @@ local colY = {
 }
 
 local columnX = {
-    left = 10,
-    center = 250,
-    right = 490
+    left = 15,
+    center = 260,
+    right = 505
 }
 
 
@@ -143,14 +206,16 @@ local function addActionButton(
 )
     side = side or "left"
 
-    local posX = columnX[side] or columnX.left
-    local posY = columns[side] or columns.left
+    local layoutSide = side
+
+    local posX = columnX[layoutSide] or columnX.left
+    local posY = columns[layoutSide] or columns.left
 
     local actionButton = guiCreateButton(
         posX,
         posY,
         185,
-        35,
+        36,
         name,
         false,
         parent
@@ -160,11 +225,14 @@ local function addActionButton(
         posX + 190,
         posY,
         40,
-        35,
+        36,
         defaultKey and string.upper(defaultKey) or "?",
         false,
         parent
     )
+
+    styleButton(actionButton, false)
+    styleButton(bindButton, true)
 
     bindsData[bindButton] = {
         fn = fn,
@@ -222,7 +290,7 @@ local function addActionButton(
         false
     )
 
-    columns[side] = posY + 40
+    columns[layoutSide] = posY + 43
 end
 
 
@@ -246,6 +314,7 @@ bindKey("f9", "down", function()
 
     guiSetVisible(mainWin, visible)
     showCursor(visible)
+    guiSetInputEnabled(visible)
 end)
 
 outputChatBox(
@@ -271,6 +340,43 @@ local flyConfig = {
     disableCarCollisions = false,
     restorePosition = true
 }
+
+local toolConfig = {
+    speedBoostMultiplier = 1.20,
+    speedBoostMode = "hold",
+    tpTake = { x = 483.034, y = -1004.596, z = 21.436 },
+    tpPut = { x = 776.723, y = -1581.878, z = 47.749 }
+}
+
+-- Сохраняем настройки в общей таблице, чтобы они не сбрасывались при переинжекте.
+local savedSettings = _G.GH_Cache.settings or {}
+if type(savedSettings.fly) == "table" then
+    for key, value in pairs(savedSettings.fly) do
+        if flyConfig[key] ~= nil and type(value) == type(flyConfig[key]) then
+            flyConfig[key] = value
+        end
+    end
+end
+
+if type(savedSettings.tools) == "table" then
+    if tonumber(savedSettings.tools.speedBoostMultiplier) then
+        toolConfig.speedBoostMultiplier = tonumber(savedSettings.tools.speedBoostMultiplier)
+    end
+
+    if savedSettings.tools.speedBoostMode == "hold" or savedSettings.tools.speedBoostMode == "press" then
+        toolConfig.speedBoostMode = savedSettings.tools.speedBoostMode
+    end
+
+    for _, pointName in ipairs({ "tpTake", "tpPut" }) do
+        if type(savedSettings.tools[pointName]) == "table" then
+            for _, axis in ipairs({ "x", "y", "z" }) do
+                if tonumber(savedSettings.tools[pointName][axis]) then
+                    toolConfig[pointName][axis] = tonumber(savedSettings.tools[pointName][axis])
+                end
+            end
+        end
+    end
+end
 
 local flySavedAlpha = {}
 
@@ -400,12 +506,12 @@ function teleportToWaypoint()
 end
 
 function tpTake()
-    teleportEntity(localPlayer, 483.034, -1004.596, 21.436)
+    teleportEntity(localPlayer, toolConfig.tpTake.x, toolConfig.tpTake.y, toolConfig.tpTake.z)
     outputChatBox("[Engine] #00FF00ТП на точку 'Взять' (с машиной)!", 255, 255, 255, true)
 end
 
 function tpPut()
-    teleportEntity(localPlayer, 776.723, -1581.878, 47.749)
+    teleportEntity(localPlayer, toolConfig.tpPut.x, toolConfig.tpPut.y, toolConfig.tpPut.z)
     outputChatBox("[Engine] #00FF00ТП на точку 'Положить' (с машиной)!", 255, 255, 255, true)
 end
 function rielt()
@@ -839,27 +945,84 @@ function getPlayerByTextID(id)
 end
 
 ----------------------------------------------------------------
--- ВКЛАДКА НАСТРОЕК FLY
+-- ВКЛАДКА НАСТРОЙКИ
 ----------------------------------------------------------------
-local tabFlySettings = guiCreateTab("Настройки Fly", tabPanel)
+local tabFlySettings = guiCreateTab("Настройка", tabPanel)
 
-guiCreateLabel(20, 20, 220, 25, "Скорость fly персонажа:", false, tabFlySettings)
-local editPlayerSpeed = guiCreateEdit(250, 17, 120, 28, tostring(flyConfig.playerSpeed), false, tabFlySettings)
+local flyTitle = guiCreateLabel(18, 12, 450, 22, "Настройка функций", false, tabFlySettings)
+guiSetFont(flyTitle, "default-bold-small")
+guiLabelSetColor(flyTitle, 85, 182, 255)
 
-guiCreateLabel(20, 60, 220, 25, "Ускорение Shift:", false, tabFlySettings)
-local editPlayerBoost = guiCreateEdit(250, 57, 120, 28, tostring(flyConfig.playerBoost), false, tabFlySettings)
+local flyHint = guiCreateLabel(18, 35, 730, 18, "Здесь можно изменить Fly, FlyCar, speedBoost и координаты телепортов. Координаты указаны в порядке X, Y, Z.", false, tabFlySettings)
+guiSetFont(flyHint, "default-small")
+guiLabelSetColor(flyHint, 140, 160, 185)
 
-guiCreateLabel(20, 110, 220, 25, "Скорость fly машины:", false, tabFlySettings)
-local editCarSpeed = guiCreateEdit(250, 107, 120, 28, tostring(flyConfig.carSpeed), false, tabFlySettings)
+local flyPlayerTitle = guiCreateLabel(18, 70, 320, 18, "Персонаж", false, tabFlySettings)
+guiSetFont(flyPlayerTitle, "default-bold-small")
+guiLabelSetColor(flyPlayerTitle, 87, 228, 157)
 
-guiCreateLabel(20, 150, 220, 25, "Ускорение машины на Shift:", false, tabFlySettings)
-local editCarBoost = guiCreateEdit(250, 147, 120, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
+guiCreateLabel(20, 100, 220, 25, "Скорость fly персонажа:", false, tabFlySettings)
+local editPlayerSpeed = guiCreateEdit(250, 97, 120, 28, tostring(flyConfig.playerSpeed), false, tabFlySettings)
+guiSetFont(editPlayerSpeed, "default-small")
 
-local checkHidePlayer = guiCreateCheckBox(20, 200, 350, 25, "Скрывать персонажа во время fly", flyConfig.hidePlayer, false, tabFlySettings)
-local checkHideVehicle = guiCreateCheckBox(20, 235, 350, 25, "Скрывать машину во время flycar", flyConfig.hideVehicle, false, tabFlySettings)
-local checkNoCollision = guiCreateCheckBox(20, 270, 350, 25, "Отключать столкновения машины", flyConfig.disableCarCollisions, false, tabFlySettings)
+guiCreateLabel(20, 140, 220, 25, "Ускорение Shift:", false, tabFlySettings)
+local editPlayerBoost = guiCreateEdit(250, 137, 120, 28, tostring(flyConfig.playerBoost), false, tabFlySettings)
+guiSetFont(editPlayerBoost, "default-small")
 
-local btnApplyFlySettings = guiCreateButton(20, 320, 350, 40, "Применить настройки", false, tabFlySettings)
+local flyCarTitle = guiCreateLabel(400, 70, 320, 18, "Машина", false, tabFlySettings)
+guiSetFont(flyCarTitle, "default-bold-small")
+guiLabelSetColor(flyCarTitle, 167, 120, 255)
+
+guiCreateLabel(400, 100, 190, 25, "Скорость fly машины:", false, tabFlySettings)
+local editCarSpeed = guiCreateEdit(610, 97, 110, 28, tostring(flyConfig.carSpeed), false, tabFlySettings)
+guiSetFont(editCarSpeed, "default-small")
+
+guiCreateLabel(400, 140, 190, 25, "Ускорение машины на Shift:", false, tabFlySettings)
+local editCarBoost = guiCreateEdit(610, 137, 110, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
+guiSetFont(editCarBoost, "default-small")
+
+local flyOptionsTitle = guiCreateLabel(18, 205, 320, 18, "Дополнительные опции", false, tabFlySettings)
+guiSetFont(flyOptionsTitle, "default-bold-small")
+guiLabelSetColor(flyOptionsTitle, 255, 188, 90)
+
+local checkHidePlayer = guiCreateCheckBox(20, 235, 350, 25, "Скрывать персонажа во время fly", flyConfig.hidePlayer, false, tabFlySettings)
+local checkHideVehicle = guiCreateCheckBox(20, 270, 350, 25, "Скрывать машину во время flycar", flyConfig.hideVehicle, false, tabFlySettings)
+local checkNoCollision = guiCreateCheckBox(20, 305, 350, 25, "Отключать столкновения машины", flyConfig.disableCarCollisions, false, tabFlySettings)
+local checkRestorePosition = guiCreateCheckBox(20, 340, 350, 25, "Возвращать позицию после выключения fly", flyConfig.restorePosition, false, tabFlySettings)
+
+local speedBoostTitle = guiCreateLabel(400, 205, 300, 18, "speedBoost", false, tabFlySettings)
+guiSetFont(speedBoostTitle, "default-bold-small")
+guiLabelSetColor(speedBoostTitle, 255, 188, 90)
+
+guiCreateLabel(400, 235, 190, 25, "Множитель скорости:", false, tabFlySettings)
+local editSpeedBoost = guiCreateEdit(610, 232, 110, 28, tostring(toolConfig.speedBoostMultiplier), false, tabFlySettings)
+guiSetFont(editSpeedBoost, "default-small")
+
+local speedBoostHold = guiCreateRadioButton(400, 270, 250, 22, "Удерживать LShift", false, tabFlySettings)
+local speedBoostPress = guiCreateRadioButton(400, 295, 250, 22, "Одно нажатие LShift", false, tabFlySettings)
+guiRadioButtonSetSelected(speedBoostHold, toolConfig.speedBoostMode == "hold")
+guiRadioButtonSetSelected(speedBoostPress, toolConfig.speedBoostMode == "press")
+
+local teleportTitle = guiCreateLabel(18, 390, 350, 18, "Координаты телепортов", false, tabFlySettings)
+guiSetFont(teleportTitle, "default-bold-small")
+guiLabelSetColor(teleportTitle, 87, 228, 157)
+
+guiCreateLabel(20, 420, 90, 25, "ТП Взять:", false, tabFlySettings)
+local editTakeX = guiCreateEdit(115, 417, 75, 28, tostring(toolConfig.tpTake.x), false, tabFlySettings)
+local editTakeY = guiCreateEdit(200, 417, 75, 28, tostring(toolConfig.tpTake.y), false, tabFlySettings)
+local editTakeZ = guiCreateEdit(285, 417, 75, 28, tostring(toolConfig.tpTake.z), false, tabFlySettings)
+
+guiCreateLabel(20, 455, 90, 25, "ТП База:", false, tabFlySettings)
+local editPutX = guiCreateEdit(115, 452, 75, 28, tostring(toolConfig.tpPut.x), false, tabFlySettings)
+local editPutY = guiCreateEdit(200, 452, 75, 28, tostring(toolConfig.tpPut.y), false, tabFlySettings)
+local editPutZ = guiCreateEdit(285, 452, 75, 28, tostring(toolConfig.tpPut.z), false, tabFlySettings)
+
+for _, edit in ipairs({ editTakeX, editTakeY, editTakeZ, editPutX, editPutY, editPutZ }) do
+    guiSetFont(edit, "default-small")
+end
+
+local btnApplyFlySettings = guiCreateButton(400, 420, 320, 40, "Применить настройки", false, tabFlySettings)
+styleButton(btnApplyFlySettings, true)
 
 local function getNumberFromEdit(edit, oldValue, minValue, maxValue)
     local value = tonumber(guiGetText(edit))
@@ -876,13 +1039,66 @@ addEventHandler("onClientGUIClick", btnApplyFlySettings, function()
     flyConfig.hidePlayer = guiCheckBoxGetSelected(checkHidePlayer)
     flyConfig.hideVehicle = guiCheckBoxGetSelected(checkHideVehicle)
     flyConfig.disableCarCollisions = guiCheckBoxGetSelected(checkNoCollision)
+    flyConfig.restorePosition = guiCheckBoxGetSelected(checkRestorePosition)
+
+    toolConfig.speedBoostMultiplier = getNumberFromEdit(editSpeedBoost, toolConfig.speedBoostMultiplier, 1, 3)
+    toolConfig.speedBoostMode = guiRadioButtonGetSelected(speedBoostHold) and "hold" or "press"
+
+    speedBoostActive = false
+    if isTimer(speedBoostTimer) then
+        killTimer(speedBoostTimer)
+    end
+    speedBoostTimer = nil
+
+    toolConfig.tpTake.x = getNumberFromEdit(editTakeX, toolConfig.tpTake.x, -10000, 10000)
+    toolConfig.tpTake.y = getNumberFromEdit(editTakeY, toolConfig.tpTake.y, -10000, 10000)
+    toolConfig.tpTake.z = getNumberFromEdit(editTakeZ, toolConfig.tpTake.z, -1000, 1000)
+
+    toolConfig.tpPut.x = getNumberFromEdit(editPutX, toolConfig.tpPut.x, -10000, 10000)
+    toolConfig.tpPut.y = getNumberFromEdit(editPutY, toolConfig.tpPut.y, -10000, 10000)
+    toolConfig.tpPut.z = getNumberFromEdit(editPutZ, toolConfig.tpPut.z, -1000, 1000)
+
+    _G.GH_Cache.settings = {
+        fly = {
+            playerSpeed = flyConfig.playerSpeed,
+            playerBoost = flyConfig.playerBoost,
+            carSpeed = flyConfig.carSpeed,
+            carBoost = flyConfig.carBoost,
+            hidePlayer = flyConfig.hidePlayer,
+            hideVehicle = flyConfig.hideVehicle,
+            disableCarCollisions = flyConfig.disableCarCollisions,
+            restorePosition = flyConfig.restorePosition
+        },
+        tools = {
+            speedBoostMultiplier = toolConfig.speedBoostMultiplier,
+            speedBoostMode = toolConfig.speedBoostMode,
+            tpTake = {
+                x = toolConfig.tpTake.x,
+                y = toolConfig.tpTake.y,
+                z = toolConfig.tpTake.z
+            },
+            tpPut = {
+                x = toolConfig.tpPut.x,
+                y = toolConfig.tpPut.y,
+                z = toolConfig.tpPut.z
+            }
+        }
+    }
 
     guiSetText(editPlayerSpeed, tostring(flyConfig.playerSpeed))
     guiSetText(editPlayerBoost, tostring(flyConfig.playerBoost))
     guiSetText(editCarSpeed, tostring(flyConfig.carSpeed))
     guiSetText(editCarBoost, tostring(flyConfig.carBoost))
+    guiSetText(editSpeedBoost, string.format("%.2f", toolConfig.speedBoostMultiplier))
 
-    outputChatBox("[Fly] #00FF00Настройки применены!", 255, 255, 255, true)
+    guiSetText(editTakeX, string.format("%.3f", toolConfig.tpTake.x))
+    guiSetText(editTakeY, string.format("%.3f", toolConfig.tpTake.y))
+    guiSetText(editTakeZ, string.format("%.3f", toolConfig.tpTake.z))
+    guiSetText(editPutX, string.format("%.3f", toolConfig.tpPut.x))
+    guiSetText(editPutY, string.format("%.3f", toolConfig.tpPut.y))
+    guiSetText(editPutZ, string.format("%.3f", toolConfig.tpPut.z))
+
+    outputChatBox("[Настройка] #00FF00Параметры применены!", 255, 255, 255, true)
 end, false)
 
 function teleportToTextID(id, name)
@@ -1001,28 +1217,28 @@ end
 -- НАПОЛНЕНИЕ ВКЛАДКИ "ПРИКОЛЫ"
 ----------------------------------------------------------------
 local menuButtons = {
-    { name = "🎯 ESP Игроки (Вкл/Выкл)", fn = toggleESP, side = "left" },
-    { name = "🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", fn = smartMarketGhost, side = "center" },
-    { name = "🚀 Телепорт к метке (X)", fn = teleportToWaypoint, side = "right", key = "x" },
-    { name = "🔧 Починить авто (H)", fn = repairVehicle, side = "left", key = "h" },
-    { name = "📷 FreeCam ([)", fn = toggleFreecam, side = "left", key = "[" },
-    { name = "🛠️ Купить ремку (0)", fn = buyRepairKit, side = "left", key = "0" },
-    { name = "🩹 Купить аптечку (9)", fn = buyMedKit, side = "left", key = "9" },
-    { name = "🩹 Купить Кушать 2к (8)", fn = buylunch, side = "left", key = "8" },
-    { name = "КУПИТЬ КАРТУ КЛАДА 1ШТ", fn = buymap, side = "left", key = "8" },
-    { name = "КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", fn = buymapx, side = "left", key = "8" },
-    { name = "КЛАД ТП)", fn = treasuress, side = "left", key = "6" },
-    { name = "📍 ТП: Взять ()", fn = tpTake, side = "left" },
-    { name = "📍 ТП: БАЗА (k)", fn = tpPut, side = "left", key = "K" },
-    { name = "📝 Копировать координаты (J)", fn = copyCoords, side = "left" },
-	{ name = "🚀 Летать на машине (f6)", fn = flycar, side = "left", key = "f6" },
-	{ name = "🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fn = fly, side = "left", key = "f5" },
-    { name = "ЗАПУСК ЧУЖОЙ ТАЧКИ", fn = toggleEngine, side = "center", key = "7" },
-    { name = "ТП НА БИРЖУ!!!", fn = rynok, side = "left" },
-    { name = "ТП К РИЕЛТОРУ!!!", fn = rielt, side = "left" },
-    { name = "ТП К ДЕНИСУ(6555)", fn = tpDenis, side = "right" },
-    { name = "ТП К ЖЕКЕ(6719)", fn = tpJeka, side = "right" },
-    { name = "autoschool прохождение", fn = autoschool, side = "right" }
+    { name = "ESP игроки", fn = toggleESP, side = "left" },
+    { name = "Скрытый режим", fn = smartMarketGhost, side = "center" },
+    { name = "Телепорт к метке", fn = teleportToWaypoint, side = "right", key = "x" },
+    { name = "Починить автомобиль", fn = repairVehicle, side = "left", key = "h" },
+    { name = "FreeCam", fn = toggleFreecam, side = "left", key = "[" },
+    { name = "Купить ремкомплект", fn = buyRepairKit, side = "left", key = "0" },
+    { name = "Купить аптечку", fn = buyMedKit, side = "left", key = "9" },
+    { name = "Купить еду", fn = buylunch, side = "left", key = "8" },
+    { name = "Купить карту клада", fn = buymap, side = "left", key = "8" },
+    { name = "Купить карту Чернобыля", fn = buymapx, side = "left", key = "8" },
+    { name = "Телепорт к кладу", fn = treasuress, side = "left", key = "6" },
+    { name = "ТП: Взять", fn = tpTake, side = "left" },
+    { name = "ТП: База", fn = tpPut, side = "left", key = "K" },
+    { name = "Скопировать координаты", fn = copyCoords, side = "left" },
+    { name = "FlyCar", fn = flycar, side = "left", key = "f6" },
+    { name = "Fly игрока", fn = fly, side = "left", key = "f5" },
+    { name = "Запустить двигатель", fn = toggleEngine, side = "center", key = "7" },
+    { name = "Телепорт на биржу", fn = rynok, side = "left" },
+    { name = "Телепорт к риелтору", fn = rielt, side = "left" },
+    { name = "Телепорт к Денису", fn = tpDenis, side = "right" },
+    { name = "Телепорт к Жеке", fn = tpJeka, side = "right" },
+    { name = "Автошкола", fn = autoschool, side = "right" }
 }
 
 for _, item in ipairs(menuButtons) do
@@ -1031,8 +1247,118 @@ end
 
 -- ВКЛАДКА: РАБОТЫ
 local tabJobs = guiCreateTab("Работы", tabPanel)
-local scrollJobs = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabJobs)
+local jobsHint = guiCreateLabel(
+    15,
+    10,
+    windowW - 70,
+    20,
+    "Слева — запуск работы, справа — увольнение, ниже указано место.",
+    false,
+    tabJobs
+)
+guiSetFont(jobsHint, "default-small")
+guiLabelSetColor(jobsHint, 140, 160, 185)
+
+local scrollJobs = guiCreateScrollPane(10, 38, windowW - 44, windowH - 118, false, tabJobs)
+guiScrollPaneSetScrollBars(scrollJobs, false, true)
 local colYJobs = { left = 10, center = 10, right = 10 }
+
+-- В некоторых сборках MTA колесо не прокручивает CEGUI ScrollPane автоматически.
+-- Поэтому добавляем плавную прокрутку активной вкладки.
+local guiScrollFallback = {}
+local guiScrollState = {}
+
+guiScrollState[scrollFun] = { current = 0, target = 0 }
+guiScrollState[scrollJobs] = { current = 0, target = 0 }
+
+local function getGuiScrollPosition(scrollPane)
+    if type(guiScrollPaneGetVerticalScrollPosition) == "function" then
+        return guiScrollPaneGetVerticalScrollPosition(scrollPane) or 0
+    end
+
+    return guiScrollFallback[scrollPane] or 0
+end
+
+local function updateGuiSmoothScroll()
+    if not guiGetVisible(mainWin) or type(guiScrollPaneSetVerticalScrollPosition) ~= "function" then
+        return
+    end
+
+    for scrollPane, state in pairs(guiScrollState) do
+        local difference = state.target - state.current
+
+        if math.abs(difference) < 0.5 then
+            state.current = state.target
+        else
+            state.current = state.current + difference * 0.22
+        end
+
+        guiScrollPaneSetVerticalScrollPosition(scrollPane, state.current)
+        guiScrollFallback[scrollPane] = state.current
+    end
+end
+
+addEventHandler("onClientRender", root, updateGuiSmoothScroll)
+cacheEvent("guiSmoothScroll", updateGuiSmoothScroll)
+
+local function handleGuiScroll(button, press)
+    if not press or not guiGetVisible(mainWin) then
+        return
+    end
+
+    if type(guiScrollPaneSetVerticalScrollPosition) ~= "function" then
+        return
+    end
+
+    local selectedTab = guiGetSelectedTab(tabPanel)
+    local scrollPane
+
+    if selectedTab == tabFun then
+        scrollPane = scrollFun
+    elseif selectedTab == tabJobs then
+        scrollPane = scrollJobs
+    end
+
+    if not scrollPane then
+        return
+    end
+
+    -- Позиция CEGUI ScrollPane задаётся в процентах, поэтому шаг небольшой.
+    local step = 8
+    local state = guiScrollState[scrollPane]
+    local current = state and state.target or getGuiScrollPosition(scrollPane)
+
+    local actual = getGuiScrollPosition(scrollPane)
+
+    if state and math.abs(actual - state.current) > 3 then
+        state.current = actual
+        state.target = state.current
+        current = state.current
+    end
+
+    if button == "mouse_wheel_up" then
+        local target = math.max(0, current - step)
+        if state then
+            state.target = target
+        else
+            guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
+            guiScrollFallback[scrollPane] = target
+        end
+        cancelEvent()
+    elseif button == "mouse_wheel_down" then
+        local target = math.min(100, current + step)
+        if state then
+            state.target = target
+        else
+            guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
+            guiScrollFallback[scrollPane] = target
+        end
+        cancelEvent()
+    end
+end
+
+addEventHandler("onClientKey", root, handleGuiScroll)
+cacheEvent("guiScroll", handleGuiScroll)
 
 local function addJobButton(name, fn, side, defaultKey)
     addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
@@ -1387,7 +1713,7 @@ local function addJobDirectoryRow(job, rowY)
     local infoLabel = guiCreateLabel(
         305,
         rowY,
-        395,
+        math.max(300, windowW - 385),
         38,
         "Место: " .. job.location,
         false,
@@ -1395,6 +1721,11 @@ local function addJobDirectoryRow(job, rowY)
     )
     guiLabelSetHorizontalAlign(infoLabel, "left", true)
     guiLabelSetVerticalAlign(infoLabel, "center")
+    guiSetFont(infoLabel, "default-small")
+    guiLabelSetColor(infoLabel, 150, 170, 195)
+
+    styleButton(jobButton, false)
+    styleButton(quitButton, true)
 
     addEventHandler("onClientGUIClick", jobButton, function()
         if waitingForBind then return end
@@ -1476,12 +1807,12 @@ end
 cacheEvent("eskavator", eskavator)
 
 local jobButtons = {
-    { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center"},
-    { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center"},
-    { name = "🚀 ФАРМ АВТОБУС(]) ", fn = avtobus, side = "center", key="]"},
-    { name = "❄️ Очиститель снега", fn = snowblower, side = "left" },
-    { name = "🚢 Теплоход", fn = sailor, side = "right" },
-    { name = "🚀 ЭСКАВАТОР", fn = eskavator, side = "right" }
+    { name = "Экскаватор: ремонт", fn = repeirm, side = "center"},
+    { name = "Экскаватор: заправка", fn = gasz, side = "center"},
+    { name = "Автофарм автобуса", fn = avtobus, side = "center", key="]"},
+    { name = "Очиститель снега", fn = snowblower, side = "left" },
+    { name = "Теплоход", fn = sailor, side = "right" },
+    { name = "Экскаватор", fn = eskavator, side = "right" }
 }
 
 for _, item in ipairs(jobButtons) do
@@ -1497,13 +1828,14 @@ local jobDirectoryY = math.max(
 local jobDirectoryTitle = guiCreateLabel(
     10,
     jobDirectoryY,
-    690,
+    math.max(600, windowW - 80),
     25,
-    "Все работы: название (лвл), кнопка увольнения и место",
+    "ВСЕ РАБОТЫ     |     название (лвл)     |     действие     |     место",
     false,
     scrollJobs
 )
 guiSetFont(jobDirectoryTitle, "default-bold-small")
+guiLabelSetColor(jobDirectoryTitle, 85, 182, 255)
 jobDirectoryY = jobDirectoryY + 30
 
 for _, job in ipairs(jobDirectory) do
@@ -1550,19 +1882,78 @@ if _G.GH_Cache.binds["speedBoostBind"] then
     if old.key and old.state and old.fn then
         unbindKey(old.key, old.state, old.fn)
     end
+    if old.key and old.upFn then
+        unbindKey(old.key, "up", old.upFn)
+    end
     _G.GH_Cache.binds["speedBoostBind"] = nil
 end
 
-local function speedBoost()
+local function stopSpeedBoostTimer()
+    if isTimer(speedBoostTimer) then
+        killTimer(speedBoostTimer)
+    end
+
+    speedBoostTimer = nil
+    _G.GH_Cache.timers["speedBoost"] = nil
+end
+
+local function applySpeedBoost()
     local veh = getPedOccupiedVehicle(localPlayer)
     if not veh or getVehicleController(veh) ~= localPlayer then return end
 
     local sx, sy, sz = getElementVelocity(veh)
-    setElementVelocity(veh, sx * 1.2, sy * 1.2, sz)
+    local multiplier = tonumber(toolConfig.speedBoostMultiplier) or 1.20
+
+    -- При удерживании ускоряем постепенно, чтобы скорость не улетала слишком резко.
+    if toolConfig.speedBoostMode == "hold" then
+        multiplier = 1 + (multiplier - 1) * 0.25
+    end
+
+    setElementVelocity(veh, sx * multiplier, sy * multiplier, sz)
 end
 
-bindKey("lshift", "down", speedBoost)
-_G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
+local function speedBoostKeyDown()
+    if toolConfig.speedBoostMode ~= "hold" then
+        applySpeedBoost()
+        return
+    end
+
+    if speedBoostActive then
+        return
+    end
+
+    speedBoostActive = true
+    applySpeedBoost()
+
+    stopSpeedBoostTimer()
+    speedBoostTimer = setTimer(function()
+        if not speedBoostActive or toolConfig.speedBoostMode ~= "hold" then
+            stopSpeedBoostTimer()
+            return
+        end
+
+        applySpeedBoost()
+    end, 100, 0)
+
+    _G.GH_Cache.timers["speedBoost"] = speedBoostTimer
+end
+
+local function speedBoostKeyUp()
+    speedBoostActive = false
+
+    if toolConfig.speedBoostMode == "hold" then
+        stopSpeedBoostTimer()
+    end
+end
+
+bindKey("lshift", "down", speedBoostKeyDown)
+bindKey("lshift", "up", speedBoostKeyUp)
+_G.GH_Cache.binds["speedBoostBind"] = {
+    key = "lshift",
+    state = "down",
+    fn = speedBoostKeyDown,
+    upFn = speedBoostKeyUp
+}
 
 outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
 
