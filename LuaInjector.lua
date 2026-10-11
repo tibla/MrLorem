@@ -86,7 +86,9 @@ _G.GH_Cache.keyHandler = keyBindInterceptor
 -- ИНТЕРФЕЙС
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
-local windowW, windowH = 900, 640
+local windowW, windowH = 860, 600
+windowW = math.min(windowW, screenW - 40)
+windowH = math.min(windowH, screenH - 40)
 local x = math.max(20, (screenW - windowW) / 2)
 local y = math.max(20, (screenH - windowH) / 2)
 
@@ -95,7 +97,7 @@ mainWin = guiCreateWindow(
     y,
     windowW,
     windowH,
-    "MR.Lorem  //  CONTROL HUB",
+    "MR.Lorem | Control Panel",
     false
 )
 
@@ -119,7 +121,7 @@ local headerLabel = guiCreateLabel(
     8,
     windowW - 40,
     18,
-    "CONTROL HUB    |    быстрый доступ к функциям и работам",
+    "Панель управления",
     false,
     mainWin
 )
@@ -159,7 +161,7 @@ local funHint = guiCreateLabel(
     10,
     windowW - 70,
     20,
-    "Быстрые действия     •     клик по ? меняет клавишу     •     команды выполняются сразу",
+    "Выберите действие. Кнопка справа меняет клавишу.",
     false,
     tabFun
 )
@@ -174,6 +176,7 @@ local scrollFun = guiCreateScrollPane(
     false,
     tabFun
 )
+guiScrollPaneSetScrollBars(scrollFun, false, true)
 local colY = {
     left = 10,
     center = 10,
@@ -182,8 +185,7 @@ local colY = {
 
 local columnX = {
     left = 15,
-    center = 300,
-    right = 585
+    right = 440
 }
 
 
@@ -197,13 +199,17 @@ local function addActionButton(
 )
     side = side or "left"
 
-    local posX = columnX[side] or columnX.left
-    local posY = columns[side] or columns.left
+    -- Обычная двухколоночная раскладка: старые значения center/right
+    -- объединяются в правую колонку, чтобы элементы не были слишком тесными.
+    local layoutSide = side == "left" and "left" or "right"
+
+    local posX = columnX[layoutSide] or columnX.left
+    local posY = columns[layoutSide] or columns.left
 
     local actionButton = guiCreateButton(
         posX,
         posY,
-        220,
+        210,
         36,
         name,
         false,
@@ -211,9 +217,9 @@ local function addActionButton(
     )
 
     local bindButton = guiCreateButton(
-        posX + 225,
+        posX + 215,
         posY,
-        40,
+        35,
         36,
         defaultKey and string.upper(defaultKey) or "?",
         false,
@@ -279,7 +285,7 @@ local function addActionButton(
         false
     )
 
-    columns[side] = posY + 43
+    columns[layoutSide] = posY + 43
 end
 
 
@@ -901,7 +907,7 @@ end
 ----------------------------------------------------------------
 local tabFlySettings = guiCreateTab("Настройки Fly", tabPanel)
 
-local flyTitle = guiCreateLabel(18, 12, 450, 22, "FLY CONTROL", false, tabFlySettings)
+local flyTitle = guiCreateLabel(18, 12, 450, 22, "Настройки Fly", false, tabFlySettings)
 guiSetFont(flyTitle, "default-bold-small")
 guiLabelSetColor(flyTitle, 85, 182, 255)
 
@@ -909,7 +915,7 @@ local flyHint = guiCreateLabel(18, 35, 650, 18, "Настрой параметр
 guiSetFont(flyHint, "default-small")
 guiLabelSetColor(flyHint, 140, 160, 185)
 
-local flyPlayerTitle = guiCreateLabel(18, 70, 320, 18, "ПЕРСОНАЖ", false, tabFlySettings)
+local flyPlayerTitle = guiCreateLabel(18, 70, 320, 18, "Персонаж", false, tabFlySettings)
 guiSetFont(flyPlayerTitle, "default-bold-small")
 guiLabelSetColor(flyPlayerTitle, 87, 228, 157)
 
@@ -919,7 +925,7 @@ local editPlayerSpeed = guiCreateEdit(250, 97, 120, 28, tostring(flyConfig.playe
 guiCreateLabel(20, 140, 220, 25, "Ускорение Shift:", false, tabFlySettings)
 local editPlayerBoost = guiCreateEdit(250, 137, 120, 28, tostring(flyConfig.playerBoost), false, tabFlySettings)
 
-local flyCarTitle = guiCreateLabel(400, 70, 320, 18, "МАШИНА", false, tabFlySettings)
+local flyCarTitle = guiCreateLabel(400, 70, 320, 18, "Машина", false, tabFlySettings)
 guiSetFont(flyCarTitle, "default-bold-small")
 guiLabelSetColor(flyCarTitle, 167, 120, 255)
 
@@ -929,7 +935,7 @@ local editCarSpeed = guiCreateEdit(610, 97, 110, 28, tostring(flyConfig.carSpeed
 guiCreateLabel(400, 140, 190, 25, "Ускорение машины на Shift:", false, tabFlySettings)
 local editCarBoost = guiCreateEdit(610, 137, 110, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
 
-local flyOptionsTitle = guiCreateLabel(18, 205, 320, 18, "ДОПОЛНИТЕЛЬНЫЕ ОПЦИИ", false, tabFlySettings)
+local flyOptionsTitle = guiCreateLabel(18, 205, 320, 18, "Дополнительные опции", false, tabFlySettings)
 guiSetFont(flyOptionsTitle, "default-bold-small")
 guiLabelSetColor(flyOptionsTitle, 255, 188, 90)
 
@@ -1080,28 +1086,28 @@ end
 -- НАПОЛНЕНИЕ ВКЛАДКИ "ПРИКОЛЫ"
 ----------------------------------------------------------------
 local menuButtons = {
-    { name = "🎯 ESP Игроки (Вкл/Выкл)", fn = toggleESP, side = "left" },
-    { name = "🚀 ЗАЙТИ В ДРУГОЙ МИР(ЧТО БЫ ТЕБЯ НЕБЫЛО ВИДНО)", fn = smartMarketGhost, side = "center" },
-    { name = "🚀 Телепорт к метке (X)", fn = teleportToWaypoint, side = "right", key = "x" },
-    { name = "🔧 Починить авто (H)", fn = repairVehicle, side = "left", key = "h" },
-    { name = "📷 FreeCam ([)", fn = toggleFreecam, side = "left", key = "[" },
-    { name = "🛠️ Купить ремку (0)", fn = buyRepairKit, side = "left", key = "0" },
-    { name = "🩹 Купить аптечку (9)", fn = buyMedKit, side = "left", key = "9" },
-    { name = "🩹 Купить Кушать 2к (8)", fn = buylunch, side = "left", key = "8" },
-    { name = "КУПИТЬ КАРТУ КЛАДА 1ШТ", fn = buymap, side = "left", key = "8" },
-    { name = "КУПИТЬ ЧЕРНОБЛЬ КАРТУ КЛАДА 1ШТ", fn = buymapx, side = "left", key = "8" },
-    { name = "КЛАД ТП)", fn = treasuress, side = "left", key = "6" },
-    { name = "📍 ТП: Взять ()", fn = tpTake, side = "left" },
-    { name = "📍 ТП: БАЗА (k)", fn = tpPut, side = "left", key = "K" },
-    { name = "📝 Копировать координаты (J)", fn = copyCoords, side = "left" },
-	{ name = "🚀 Летать на машине (f6)", fn = flycar, side = "left", key = "f6" },
-	{ name = "🚀 FLY НА ПЕРСОНАЖЕ!!! (f5)", fn = fly, side = "left", key = "f5" },
-    { name = "ЗАПУСК ЧУЖОЙ ТАЧКИ", fn = toggleEngine, side = "center", key = "7" },
-    { name = "ТП НА БИРЖУ!!!", fn = rynok, side = "left" },
-    { name = "ТП К РИЕЛТОРУ!!!", fn = rielt, side = "left" },
-    { name = "ТП К ДЕНИСУ(6555)", fn = tpDenis, side = "right" },
-    { name = "ТП К ЖЕКЕ(6719)", fn = tpJeka, side = "right" },
-    { name = "autoschool прохождение", fn = autoschool, side = "right" }
+    { name = "ESP игроки", fn = toggleESP, side = "left" },
+    { name = "Скрытый режим", fn = smartMarketGhost, side = "center" },
+    { name = "Телепорт к метке", fn = teleportToWaypoint, side = "right", key = "x" },
+    { name = "Починить автомобиль", fn = repairVehicle, side = "left", key = "h" },
+    { name = "FreeCam", fn = toggleFreecam, side = "left", key = "[" },
+    { name = "Купить ремкомплект", fn = buyRepairKit, side = "left", key = "0" },
+    { name = "Купить аптечку", fn = buyMedKit, side = "left", key = "9" },
+    { name = "Купить еду", fn = buylunch, side = "left", key = "8" },
+    { name = "Купить карту клада", fn = buymap, side = "left", key = "8" },
+    { name = "Купить карту Чернобыля", fn = buymapx, side = "left", key = "8" },
+    { name = "Телепорт к кладу", fn = treasuress, side = "left", key = "6" },
+    { name = "ТП: Взять", fn = tpTake, side = "left" },
+    { name = "ТП: База", fn = tpPut, side = "left", key = "K" },
+    { name = "Скопировать координаты", fn = copyCoords, side = "left" },
+    { name = "FlyCar", fn = flycar, side = "left", key = "f6" },
+    { name = "Fly игрока", fn = fly, side = "left", key = "f5" },
+    { name = "Запустить двигатель", fn = toggleEngine, side = "center", key = "7" },
+    { name = "Телепорт на биржу", fn = rynok, side = "left" },
+    { name = "Телепорт к риелтору", fn = rielt, side = "left" },
+    { name = "Телепорт к Денису", fn = tpDenis, side = "right" },
+    { name = "Телепорт к Жеке", fn = tpJeka, side = "right" },
+    { name = "Автошкола", fn = autoschool, side = "right" }
 }
 
 for _, item in ipairs(menuButtons) do
@@ -1115,7 +1121,7 @@ local jobsHint = guiCreateLabel(
     10,
     windowW - 70,
     20,
-    "СПРАВОЧНИК РАБОТ     •     слева запуск     •     справа увольнение     •     место указано в описании",
+    "Слева — запуск работы, справа — увольнение, ниже указано место.",
     false,
     tabJobs
 )
@@ -1123,11 +1129,16 @@ guiSetFont(jobsHint, "default-small")
 guiLabelSetColor(jobsHint, 140, 160, 185)
 
 local scrollJobs = guiCreateScrollPane(10, 38, windowW - 44, windowH - 118, false, tabJobs)
+guiScrollPaneSetScrollBars(scrollJobs, false, true)
 local colYJobs = { left = 10, center = 10, right = 10 }
 
 -- В некоторых сборках MTA колесо не прокручивает CEGUI ScrollPane автоматически.
--- Поэтому добавляем ручную прокрутку активной вкладки.
+-- Поэтому добавляем плавную прокрутку активной вкладки.
 local guiScrollFallback = {}
+local guiScrollState = {}
+
+guiScrollState[scrollFun] = { current = 0, target = 0 }
+guiScrollState[scrollJobs] = { current = 0, target = 0 }
 
 local function getGuiScrollPosition(scrollPane)
     if type(guiScrollPaneGetVerticalScrollPosition) == "function" then
@@ -1136,6 +1147,28 @@ local function getGuiScrollPosition(scrollPane)
 
     return guiScrollFallback[scrollPane] or 0
 end
+
+local function updateGuiSmoothScroll()
+    if not guiGetVisible(mainWin) or type(guiScrollPaneSetVerticalScrollPosition) ~= "function" then
+        return
+    end
+
+    for scrollPane, state in pairs(guiScrollState) do
+        local difference = state.target - state.current
+
+        if math.abs(difference) < 0.5 then
+            state.current = state.target
+        else
+            state.current = state.current + difference * 0.22
+        end
+
+        guiScrollPaneSetVerticalScrollPosition(scrollPane, state.current)
+        guiScrollFallback[scrollPane] = state.current
+    end
+end
+
+addEventHandler("onClientRender", root, updateGuiSmoothScroll)
+cacheEvent("guiSmoothScroll", updateGuiSmoothScroll)
 
 local function handleGuiScroll(button, press)
     if not press or not guiGetVisible(mainWin) then
@@ -1159,18 +1192,36 @@ local function handleGuiScroll(button, press)
         return
     end
 
-    local step = 55
-    local current = getGuiScrollPosition(scrollPane)
+    -- Позиция CEGUI ScrollPane задаётся в процентах, поэтому шаг небольшой.
+    local step = 8
+    local state = guiScrollState[scrollPane]
+    local current = state and state.target or getGuiScrollPosition(scrollPane)
+
+    local actual = getGuiScrollPosition(scrollPane)
+
+    if state and math.abs(actual - state.current) > 3 then
+        state.current = actual
+        state.target = state.current
+        current = state.current
+    end
 
     if button == "mouse_wheel_up" then
         local target = math.max(0, current - step)
-        guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
-        guiScrollFallback[scrollPane] = target
+        if state then
+            state.target = target
+        else
+            guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
+            guiScrollFallback[scrollPane] = target
+        end
         cancelEvent()
     elseif button == "mouse_wheel_down" then
-        local target = current + step
-        guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
-        guiScrollFallback[scrollPane] = target
+        local target = math.min(100, current + step)
+        if state then
+            state.target = target
+        else
+            guiScrollPaneSetVerticalScrollPosition(scrollPane, target)
+            guiScrollFallback[scrollPane] = target
+        end
         cancelEvent()
     end
 end
@@ -1531,7 +1582,7 @@ local function addJobDirectoryRow(job, rowY)
     local infoLabel = guiCreateLabel(
         335,
         rowY,
-        500,
+        math.max(300, windowW - 360),
         38,
         "Место: " .. job.location,
         false,
@@ -1625,12 +1676,12 @@ end
 cacheEvent("eskavator", eskavator)
 
 local jobButtons = {
-    { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center"},
-    { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center"},
-    { name = "🚀 ФАРМ АВТОБУС(]) ", fn = avtobus, side = "center", key="]"},
-    { name = "❄️ Очиститель снега", fn = snowblower, side = "left" },
-    { name = "🚢 Теплоход", fn = sailor, side = "right" },
-    { name = "🚀 ЭСКАВАТОР", fn = eskavator, side = "right" }
+    { name = "Экскаватор: ремонт", fn = repeirm, side = "center"},
+    { name = "Экскаватор: заправка", fn = gasz, side = "center"},
+    { name = "Автофарм автобуса", fn = avtobus, side = "center", key="]"},
+    { name = "Очиститель снега", fn = snowblower, side = "left" },
+    { name = "Теплоход", fn = sailor, side = "right" },
+    { name = "Экскаватор", fn = eskavator, side = "right" }
 }
 
 for _, item in ipairs(jobButtons) do
@@ -1646,7 +1697,7 @@ local jobDirectoryY = math.max(
 local jobDirectoryTitle = guiCreateLabel(
     10,
     jobDirectoryY,
-    920,
+    math.max(600, windowW - 80),
     25,
     "ВСЕ РАБОТЫ     |     название (лвл)     |     действие     |     место",
     false,
@@ -1683,13 +1734,6 @@ bindKey("]", "down", function()
         outputChatBox("[Engine] #FF0000Auto-Farm (Автобус): OFF", 255, 255, 255, true)
     end
 end)
-
-
--- ==========================================
--- ВКЛАДКА LUA-КОДА
--- Требуются: tabPanel, windowW, windowH
--- ==========================================
-
 
 
 
