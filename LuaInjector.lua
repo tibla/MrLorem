@@ -295,7 +295,7 @@ local flyConfig = {
 
 local toolConfig = {
     speedBoostMultiplier = 1.20,
-    speedBoostMode = "hold",
+    speedBoostMode = "press",
     tpTake = { x = 483.034, y = -1004.596, z = 21.436 },
     tpPut = { x = 776.723, y = -1581.878, z = 47.749 }
 }
@@ -358,7 +358,7 @@ end
 local ESP_MAX_DISTANCE = 300 
 local COLOR_RED = tocolor(255, 0, 0, 255) 
 local COLOR_STOKE = tocolor(0, 0, 0, 220) 
-local espEnabled = false
+local espEnabled = true
 
 local function drawPlayerESP()
     local px, py, pz = getElementPosition(localPlayer)
