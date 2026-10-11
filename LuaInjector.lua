@@ -300,7 +300,7 @@ end
 local ESP_MAX_DISTANCE = 300 
 local COLOR_RED = tocolor(255, 0, 0, 255) 
 local COLOR_STOKE = tocolor(0, 0, 0, 220) 
-local espEnabled = false
+local espEnabled = true
 
 local function drawPlayerESP()
     local px, py, pz = getElementPosition(localPlayer)
