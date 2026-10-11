@@ -7,22 +7,37 @@ _G.GH_Cache.binds = _G.GH_Cache.binds or {}
 _G.GH_Cache.gui = _G.GH_Cache.gui or {}
 _G.GH_Cache.timers = _G.GH_Cache.timers or {}
 
-local bindsData = {}
+local cefActions = {}
+local cefActionLists = { fun = {}, jobs = {} }
+local cefJobs = {}
+local nextCefActionId = 0
 local waitingForBind = nil
 local autoMode = false
 local autoTimer = nil
+local cefBrowser = nil
+local cefBrowserReady = false
+local cefVisible = false
+local pushCefState
 
 local function cacheEvent(name, fn)
     _G.GH_Cache.events[name] = { root = root, fn = fn }
 end
 
 function fullCleanup()
-    -- 1. Удаляем главное окно
-    if isElement(mainWin) then destroyElement(mainWin) end
+    -- 1. Удаляем CEF-окно
+    cefVisible = false
+    cefBrowserReady = false
+    focusBrowser(nil)
+    if isElement(cefBrowser) then
+        destroyElement(cefBrowser)
+        cefBrowser = nil
+    end
     
     -- 2. Снимаем все бинды кнопок
-    for btn, data in pairs(bindsData) do
-        if data.key then unbindKey(data.key, "down", data.fn) end
+    for _, data in pairs(cefActions) do
+        if data.boundKey and data.bindFn then
+            unbindKey(data.boundKey, "down", data.bindFn)
+        end
     end
     unbindKey("f9", "down")
     unbindKey("]", "down")
@@ -45,7 +60,9 @@ function fullCleanup()
     -- 5. Очистка кэша
     _G.GH_Cache.events = {}
     _G.GH_Cache.timers = {}
-    bindsData = {}
+    cefActions = {}
+    cefActionLists = { fun = {}, jobs = {} }
+    cefJobs = {}
     waitingForBind = nil
     
     showCursor(false)
@@ -53,207 +70,64 @@ function fullCleanup()
 end
 
 ----------------------------------------------------------------
--- ЛОГИКА БИНДЕРА (КЛИК ПО КВАДРАТУ)
+-- СВЯЗЬ ДЕЙСТВИЙ С CEF-ИНТЕРФЕЙСОМ
 ----------------------------------------------------------------
-local function keyBindInterceptor(button, press)
-    if not press or not waitingForBind then return end
-    cancelEvent()
-    
-    local data = bindsData[waitingForBind]
-    if data.key then unbindKey(data.key, "down", data.fn) end
-    
-    if button == "escape" or button == "backspace" then
-        data.key = nil
-        guiSetText(waitingForBind, "?")
-        outputChatBox("Бинд удален", 255, 0, 0)
-    else
-        data.key = button
-        guiSetText(waitingForBind, string.upper(button))
-        bindKey(button, "down", data.fn)
-        outputChatBox("Забинджено на: " .. string.upper(button), 0, 255, 0)
-    end
-    waitingForBind = nil
-end
-addEventHandler("onClientKey", root, keyBindInterceptor)
-_G.GH_Cache.keyHandler = keyBindInterceptor
+local function registerCefAction(tabName, name, fn, defaultKey, metadata)
+    nextCefActionId = nextCefActionId + 1
 
-----------------------------------------------------------------
--- ИНТЕРФЕЙС
-----------------------------------------------------------------
-local screenW, screenH = guiGetScreenSize()
-local windowW, windowH = 750, 720
-local x, y = (screenW - windowW) / 2, (screenH - windowH) / 2
-
-mainWin = guiCreateWindow(
-    x,
-    y,
-    windowW,
-    windowH,
-    "MR.Lorem | Control Panel",
-    false
-)
-
-guiWindowSetSizable(mainWin, false)
-guiSetVisible(mainWin, false)
-
--- Создаём панель вкладок
-local tabPanel = guiCreateTabPanel(
-    10,
-    25,
-    windowW - 20,
-    windowH - 40,
-    false,
-    mainWin
-)
-
--- Вкладка «Приколы»
-local tabFun = guiCreateTab(
-    "Приколы",
-    tabPanel
-)
-
-local scrollFun = guiCreateScrollPane(
-    5,
-    5,
-    windowW - 30,
-    windowH - 80,
-    false,
-    tabFun
-)
-local colY = {
-    left = 10,
-    center = 10,
-    right = 10
-}
-
-local columnX = {
-    left = 10,
-    center = 250,
-    right = 490
-}
-
-
-local function addActionButton(
-    parent,
-    columns,
-    name,
-    fn,
-    side,
-    defaultKey
-)
-    side = side or "left"
-
-    local posX = columnX[side] or columnX.left
-    local posY = columns[side] or columns.left
-
-    local actionButton = guiCreateButton(
-        posX,
-        posY,
-        185,
-        35,
-        name,
-        false,
-        parent
-    )
-
-    local bindButton = guiCreateButton(
-        posX + 190,
-        posY,
-        40,
-        35,
-        defaultKey and string.upper(defaultKey) or "?",
-        false,
-        parent
-    )
-
-    bindsData[bindButton] = {
+    local id = "action_" .. tostring(nextCefActionId)
+    local action = {
+        id = id,
+        name = name,
         fn = fn,
         key = defaultKey,
-        name = name
+        boundKey = nil,
+        bindFn = nil,
+        metadata = metadata or {},
     }
 
-    if defaultKey then
-        bindKey(
-            defaultKey,
-            "down",
-            fn
-        )
+    action.bindFn = function()
+        if action.fn then
+            action.fn()
+        end
     end
 
-    addEventHandler(
-        "onClientGUIClick",
-        actionButton,
-        function()
-            if not waitingForBind then
-                fn()
-            end
-        end,
-        false
-    )
+    cefActions[id] = action
+    table.insert(cefActionLists[tabName], action)
 
-    addEventHandler(
-        "onClientGUIClick",
-        bindButton,
-        function()
-            if waitingForBind
-                and bindsData[waitingForBind]
-            then
-                local previous =
-                    bindsData[waitingForBind].key
+    if defaultKey and defaultKey ~= "" then
+        bindKey(defaultKey, "down", action.bindFn)
+        action.boundKey = defaultKey
+    end
 
-                guiSetText(
-                    waitingForBind,
-                    previous
-                        and string.upper(previous)
-                        or "?"
-                )
-            end
-
-            waitingForBind = source
-            guiSetText(source, "...")
-
-            outputChatBox(
-                "Нажми клавишу для бинда.",
-                255,
-                255,
-                0
-            )
-        end,
-        false
-    )
-
-    columns[side] = posY + 40
+    return id
 end
 
+----------------------------------------------------------------
+-- CEF-ИНТЕРФЕЙС
+----------------------------------------------------------------
+local screenW, screenH = guiGetScreenSize()
+local windowW, windowH = 1120, 740
 
-local function addMenuButton(
-    name,
-    fn,
-    side,
-    defaultKey
-)
-    addActionButton(
-        scrollFun,
-        colY,
-        name,
-        fn,
-        side,
-        defaultKey
-    )
+local function addMenuButton(name, fn, side, defaultKey)
+    registerCefAction("fun", name, fn, defaultKey, {
+        side = side or "left",
+    })
 end
+
+local function addJobButton(name, fn, side, defaultKey)
+    registerCefAction("jobs", name, fn, defaultKey, {
+        side = side or "left",
+    })
+end
+
 bindKey("f9", "down", function()
-    local visible = not guiGetVisible(mainWin)
-
-    guiSetVisible(mainWin, visible)
-    showCursor(visible)
+    if toggleCefUi then
+        toggleCefUi()
+    end
 end)
 
-outputChatBox(
-    "[Engine] F9 готов!",
-    0,
-    255,
-    0
-)
+outputChatBox("[Engine] CEF-панель готова. Открытие: F9", 0, 255, 0)
 ----------------------------------------------------------------
 -- НАСТРОЙКИ FLY
 ----------------------------------------------------------------
@@ -912,51 +786,37 @@ function getPlayerByTextID(id)
 end
 
 ----------------------------------------------------------------
--- ВКЛАДКА НАСТРОЕК FLY
+-- НАСТРОЙКИ FLY ДЛЯ CEF
 ----------------------------------------------------------------
-local tabFlySettings = guiCreateTab("Настройки Fly", tabPanel)
+local function clampNumber(value, oldValue, minValue, maxValue)
+    value = tonumber(value)
+    if not value then
+        return oldValue
+    end
 
-guiCreateLabel(20, 20, 220, 25, "Скорость fly персонажа:", false, tabFlySettings)
-local editPlayerSpeed = guiCreateEdit(250, 17, 120, 28, tostring(flyConfig.playerSpeed), false, tabFlySettings)
-
-guiCreateLabel(20, 60, 220, 25, "Ускорение Shift:", false, tabFlySettings)
-local editPlayerBoost = guiCreateEdit(250, 57, 120, 28, tostring(flyConfig.playerBoost), false, tabFlySettings)
-
-guiCreateLabel(20, 110, 220, 25, "Скорость fly машины:", false, tabFlySettings)
-local editCarSpeed = guiCreateEdit(250, 107, 120, 28, tostring(flyConfig.carSpeed), false, tabFlySettings)
-
-guiCreateLabel(20, 150, 220, 25, "Ускорение машины на Shift:", false, tabFlySettings)
-local editCarBoost = guiCreateEdit(250, 147, 120, 28, tostring(flyConfig.carBoost), false, tabFlySettings)
-
-local checkHidePlayer = guiCreateCheckBox(20, 200, 350, 25, "Скрывать персонажа во время fly", flyConfig.hidePlayer, false, tabFlySettings)
-local checkHideVehicle = guiCreateCheckBox(20, 235, 350, 25, "Скрывать машину во время flycar", flyConfig.hideVehicle, false, tabFlySettings)
-local checkNoCollision = guiCreateCheckBox(20, 270, 350, 25, "Отключать столкновения машины", flyConfig.disableCarCollisions, false, tabFlySettings)
-
-local btnApplyFlySettings = guiCreateButton(20, 320, 350, 40, "Применить настройки", false, tabFlySettings)
-
-local function getNumberFromEdit(edit, oldValue, minValue, maxValue)
-    local value = tonumber(guiGetText(edit))
-    if not value then return oldValue end
     return math.max(minValue, math.min(maxValue, value))
 end
 
-addEventHandler("onClientGUIClick", btnApplyFlySettings, function()
-    flyConfig.playerSpeed = getNumberFromEdit(editPlayerSpeed, flyConfig.playerSpeed, 0.05, 10)
-    flyConfig.playerBoost = getNumberFromEdit(editPlayerBoost, flyConfig.playerBoost, 1, 20)
-    flyConfig.carSpeed = getNumberFromEdit(editCarSpeed, flyConfig.carSpeed, 0.05, 10)
-    flyConfig.carBoost = getNumberFromEdit(editCarBoost, flyConfig.carBoost, 1, 20)
+local function applyFlySettings(
+    playerSpeed,
+    playerBoost,
+    carSpeed,
+    carBoost,
+    hidePlayer,
+    hideVehicle,
+    disableCarCollisions
+)
+    flyConfig.playerSpeed = clampNumber(playerSpeed, flyConfig.playerSpeed, 0.05, 10)
+    flyConfig.playerBoost = clampNumber(playerBoost, flyConfig.playerBoost, 1, 20)
+    flyConfig.carSpeed = clampNumber(carSpeed, flyConfig.carSpeed, 0.05, 10)
+    flyConfig.carBoost = clampNumber(carBoost, flyConfig.carBoost, 1, 20)
 
-    flyConfig.hidePlayer = guiCheckBoxGetSelected(checkHidePlayer)
-    flyConfig.hideVehicle = guiCheckBoxGetSelected(checkHideVehicle)
-    flyConfig.disableCarCollisions = guiCheckBoxGetSelected(checkNoCollision)
-
-    guiSetText(editPlayerSpeed, tostring(flyConfig.playerSpeed))
-    guiSetText(editPlayerBoost, tostring(flyConfig.playerBoost))
-    guiSetText(editCarSpeed, tostring(flyConfig.carSpeed))
-    guiSetText(editCarBoost, tostring(flyConfig.carBoost))
+    flyConfig.hidePlayer = hidePlayer == true
+    flyConfig.hideVehicle = hideVehicle == true
+    flyConfig.disableCarCollisions = disableCarCollisions == true
 
     outputChatBox("[Fly] #00FF00Настройки применены!", 255, 255, 255, true)
-end, false)
+end
 
 function teleportToTextID(id, name)
     local targetPlayer = getPlayerByTextID(id)
@@ -1103,13 +963,7 @@ for _, item in ipairs(menuButtons) do
 end
 
 -- ВКЛАДКА: РАБОТЫ
-local tabJobs = guiCreateTab("Работы", tabPanel)
-local scrollJobs = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabJobs)
-local colYJobs = { left = 10, center = 10, right = 10 }
-
-local function addJobButton(name, fn, side, defaultKey)
-    addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
-end
+-- Рабочие кнопки регистрируются в CEF через addJobButton выше.
 
 -- Справочник профессий из job_configs.lua.
 -- Левая кнопка пытается открыть/запустить работу, правая увольняет.
@@ -1437,52 +1291,34 @@ local jobDirectory = {
 }
 
 local function addJobDirectoryRow(job, rowY)
-    local jobButton = guiCreateButton(
-        10,
-        rowY,
-        180,
-        38,
+    local startId = registerCefAction(
+        "jobs",
         string.format("%s (лвл %s)", job.name, job.level),
-        false,
-        scrollJobs
+        job.start,
+        nil,
+        { kind = "job-start" }
     )
 
-    local quitButton = guiCreateButton(
-        200,
-        rowY,
-        95,
-        38,
+    local stopId = registerCefAction(
+        "jobs",
         "Уволиться",
-        false,
-        scrollJobs
+        function()
+            if job.stop then
+                job.stop()
+                outputChatBox("Запрос на увольнение отправлен.", 255, 220, 0)
+            end
+        end,
+        nil,
+        { kind = "job-stop" }
     )
 
-    local infoLabel = guiCreateLabel(
-        305,
-        rowY,
-        395,
-        38,
-        "Место: " .. job.location,
-        false,
-        scrollJobs
-    )
-    guiLabelSetHorizontalAlign(infoLabel, "left", true)
-    guiLabelSetVerticalAlign(infoLabel, "center")
-
-    addEventHandler("onClientGUIClick", jobButton, function()
-        if waitingForBind then return end
-        if job.start then
-            job.start()
-        end
-    end, false)
-
-    addEventHandler("onClientGUIClick", quitButton, function()
-        if waitingForBind then return end
-        if job.stop then
-            job.stop()
-            outputChatBox("Запрос на увольнение отправлен.", 255, 220, 0)
-        end
-    end, false)
+    table.insert(cefJobs, {
+        name = job.name,
+        level = job.level,
+        location = job.location,
+        startId = startId,
+        stopId = stopId,
+    })
 end
 
 function repeirm()
@@ -1561,6 +1397,9 @@ function avtobus()
         avtobusWaypoint = nil
         avtobusLastPreload = nil
         autoMode = false
+        if pushCefState then
+            pushCefState()
+        end
         return
     end
 
@@ -1650,6 +1489,41 @@ function avtobus()
     teleportAvtobusVehicle(veh)
 end
 
+local function toggleBusFarm()
+    if isTimer(autoTimer) then
+        killTimer(autoTimer)
+        autoTimer = nil
+    end
+
+    autoMode = not autoMode
+
+    if autoMode then
+        autoTimer = setTimer(avtobus, 100, 0)
+
+        if _G.GH_Cache and _G.GH_Cache.timers then
+            _G.GH_Cache.timers.busFarm = autoTimer
+        end
+
+        outputChatBox("[Engine] #00FF00Auto-Farm (Автобус): ON", 255, 255, 255, true)
+    else
+        stopAvtobusPreload()
+        avtobusWaypoint = nil
+        avtobusLastPreload = nil
+
+        local vehicle = getPedOccupiedVehicle(localPlayer)
+        if isElement(vehicle) then
+            setElementCollisionsEnabled(vehicle, true)
+        end
+
+        outputChatBox("[Engine] #FF0000Auto-Farm (Автобус): OFF", 255, 255, 255, true)
+    end
+
+    if pushCefState then
+        pushCefState()
+    end
+end
+cacheEvent("toggleBusFarm", toggleBusFarm)
+
 function eskavator()
     setTimer(function()
         outputChatBox("ЗАПРАВКА ЧЕЛА ПОШЛА", 0, 255, 0)
@@ -1661,7 +1535,7 @@ cacheEvent("eskavator", eskavator)
 local jobButtons = {
     { name = "🚀 ЭСКАВАТОР починить", fn = repeirm, side = "center"},
     { name = "🚀 ЭСКАВАТОР заправить ", fn = gasz, side = "center"},
-    { name = "🚀 ФАРМ АВТОБУС(]) ", fn = avtobus, side = "center", key="]"},
+    { name = "🚀 ФАРМ АВТОБУС (вкл/выкл)", fn = toggleBusFarm, side = "center" },
     { name = "❄️ Очиститель снега", fn = snowblower, side = "left" },
     { name = "🚢 Теплоход", fn = sailor, side = "right" },
     { name = "🚀 ЭСКАВАТОР", fn = eskavator, side = "right" }
@@ -1671,59 +1545,11 @@ for _, item in ipairs(jobButtons) do
     addJobButton(item.name, item.fn, item.side, item.key)
 end
 
-local jobDirectoryY = math.max(
-    colYJobs.left,
-    colYJobs.center,
-    colYJobs.right
-) + 8
-
-local jobDirectoryTitle = guiCreateLabel(
-    10,
-    jobDirectoryY,
-    690,
-    25,
-    "Все работы: название (лвл), кнопка увольнения и место",
-    false,
-    scrollJobs
-)
-guiSetFont(jobDirectoryTitle, "default-bold-small")
-jobDirectoryY = jobDirectoryY + 30
-
 for _, job in ipairs(jobDirectory) do
-    addJobDirectoryRow(job, jobDirectoryY)
-    jobDirectoryY = jobDirectoryY + 48
+    addJobDirectoryRow(job)
 end
 
-bindKey("]", "down", function() 
-    if isTimer(autoTimer) then 
-        killTimer(autoTimer) 
-        autoTimer = nil
-    end
-    
-    autoMode = not autoMode 
-    
-    if autoMode then
-        autoTimer = setTimer(avtobus, 100, 0)
-        if _G.GH_Cache and _G.GH_Cache.timers then 
-            _G.GH_Cache.timers["busFarm"] = autoTimer 
-        end
-        outputChatBox("[Engine] #00FF00Auto-Farm (Автобус): ON", 255, 255, 255, true)
-    else
-        local v = getPedOccupiedVehicle(localPlayer)
-        if isElement(v) then 
-            setElementCollisionsEnabled(v, true) 
-        end
-        outputChatBox("[Engine] #FF0000Auto-Farm (Автобус): OFF", 255, 255, 255, true)
-    end
-end)
-
-
--- ==========================================
--- ВКЛАДКА LUA-КОДА
--- Требуются: tabPanel, windowW, windowH
--- ==========================================
-
-
+bindKey("]", "down", toggleBusFarm)
 
 
 -- СКОРОСТЬ МАШИНЫ (Shift)
@@ -1747,5 +1573,246 @@ end
 bindKey("lshift", "down", speedBoost)
 _G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
 
-outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
+----------------------------------------------------------------
+-- CEF / WEB UI
+----------------------------------------------------------------
+local function jsonEscape(value)
+    value = tostring(value or "")
+    value = value:gsub("\\", "\\\\")
+    value = value:gsub('"', '\\"')
+    value = value:gsub("\r", "\\r")
+    value = value:gsub("\n", "\\n")
+    value = value:gsub("\t", "\\t")
+    return value
+end
 
+local function jsonString(value)
+    return '"' .. jsonEscape(value) .. '"'
+end
+
+local function jsonBoolean(value)
+    return value and "true" or "false"
+end
+
+local function serializeAction(action)
+    local kind = action.metadata and action.metadata.kind or ""
+
+    return "{" ..
+        "id:" .. jsonString(action.id) .. "," ..
+        "name:" .. jsonString(action.name) .. "," ..
+        "key:" .. jsonString(action.key or "") .. "," ..
+        "kind:" .. jsonString(kind) ..
+    "}"
+end
+
+local function serializeActionList(list)
+    local result = {}
+
+    for _, action in ipairs(list) do
+        table.insert(result, serializeAction(action))
+    end
+
+    return "[" .. table.concat(result, ",") .. "]"
+end
+
+local function serializeJobs()
+    local result = {}
+
+    for _, job in ipairs(cefJobs) do
+        table.insert(result, "{" ..
+            "name:" .. jsonString(job.name) .. "," ..
+            "level:" .. jsonString(job.level) .. "," ..
+            "location:" .. jsonString(job.location) .. "," ..
+            "startId:" .. jsonString(job.startId) .. "," ..
+            "stopId:" .. jsonString(job.stopId) ..
+        "}")
+    end
+
+    return "[" .. table.concat(result, ",") .. "]"
+end
+
+local function serializeFlyConfig()
+    return "{" ..
+        "playerSpeed:" .. tostring(flyConfig.playerSpeed) .. "," ..
+        "playerBoost:" .. tostring(flyConfig.playerBoost) .. "," ..
+        "carSpeed:" .. tostring(flyConfig.carSpeed) .. "," ..
+        "carBoost:" .. tostring(flyConfig.carBoost) .. "," ..
+        "hidePlayer:" .. jsonBoolean(flyConfig.hidePlayer) .. "," ..
+        "hideVehicle:" .. jsonBoolean(flyConfig.hideVehicle) .. "," ..
+        "disableCarCollisions:" .. jsonBoolean(flyConfig.disableCarCollisions) ..
+    "}"
+end
+
+local function buildCefState()
+    return "{" ..
+        "fun:" .. serializeActionList(cefActionLists.fun) .. "," ..
+        "jobs:" .. serializeActionList(cefActionLists.jobs) .. "," ..
+        "jobDirectory:" .. serializeJobs() .. "," ..
+        "fly:" .. serializeFlyConfig() .. "," ..
+        "autoMode:" .. jsonBoolean(autoMode) ..
+    "}"
+end
+
+pushCefState = function()
+    if not cefBrowserReady or not isElement(cefBrowser) then
+        return
+    end
+
+    executeBrowserJavascript(
+        cefBrowser,
+        "window.setLuaState(" .. buildCefState() .. ");"
+    )
+end
+
+local function normalizeCefKey(key)
+    key = tostring(key or ""):lower()
+
+    local aliases = {
+        ["bracketleft"] = "[",
+        ["bracketright"] = "]",
+        ["escape"] = "escape",
+        ["backspace"] = "backspace",
+        ["enter"] = "enter",
+        [" "] = "space",
+        ["shift"] = "lshift",
+        ["control"] = "lctrl",
+        ["alt"] = "lalt",
+    }
+
+    return aliases[key] or key
+end
+
+local function setCefActionKey(actionId, key)
+    local action = cefActions[actionId]
+
+    if not action then
+        return
+    end
+
+    key = normalizeCefKey(key)
+
+    if action.boundKey and action.bindFn then
+        unbindKey(action.boundKey, "down", action.bindFn)
+        action.boundKey = nil
+    end
+
+    if key == "escape" or key == "backspace" or key == "" then
+        action.key = nil
+        outputChatBox("Бинд удален", 255, 120, 0)
+    else
+        action.key = key
+        action.boundKey = key
+        bindKey(key, "down", action.bindFn)
+        outputChatBox("Забинджено на: " .. string.upper(key), 0, 255, 0)
+    end
+
+    pushCefState()
+end
+
+addEvent("CEF:Action", true)
+addEventHandler("CEF:Action", root, function(actionId)
+    if source ~= cefBrowser then
+        return
+    end
+
+    local action = cefActions[tostring(actionId)]
+    if action and action.fn then
+        action.fn()
+    end
+
+    pushCefState()
+end)
+
+addEvent("CEF:SetBind", true)
+addEventHandler("CEF:SetBind", root, function(actionId, key)
+    if source ~= cefBrowser then
+        return
+    end
+
+    setCefActionKey(tostring(actionId), key)
+end)
+
+addEvent("CEF:ApplyFly", true)
+addEventHandler("CEF:ApplyFly", root, function(
+    playerSpeed,
+    playerBoost,
+    carSpeed,
+    carBoost,
+    hidePlayer,
+    hideVehicle,
+    disableCarCollisions
+)
+    if source ~= cefBrowser then
+        return
+    end
+
+    applyFlySettings(
+        playerSpeed,
+        playerBoost,
+        carSpeed,
+        carBoost,
+        hidePlayer,
+        hideVehicle,
+        disableCarCollisions
+    )
+
+    pushCefState()
+end)
+
+addEvent("CEF:Toggle", true)
+addEventHandler("CEF:Toggle", root, function()
+    if source ~= cefBrowser then
+        return
+    end
+
+    toggleCefUi()
+end)
+
+local function drawCefBrowser()
+    if cefVisible and isElement(cefBrowser) then
+        dxDrawImage(
+            0,
+            0,
+            screenW,
+            screenH,
+            cefBrowser,
+            0,
+            0,
+            0,
+            tocolor(255, 255, 255, 255),
+            true
+        )
+    end
+end
+
+function toggleCefUi()
+    cefVisible = not cefVisible
+    showCursor(cefVisible)
+
+    if cefVisible then
+        focusBrowser(cefBrowser)
+        pushCefState()
+    else
+        focusBrowser(nil)
+    end
+end
+
+cefBrowser = createBrowser(screenW, screenH, true, true)
+
+if isElement(cefBrowser) then
+    addEventHandler("onClientBrowserCreated", cefBrowser, function()
+        loadBrowserURL(source, "http://mta/local/index.html")
+    end)
+
+    addEventHandler("onClientBrowserDocumentReady", cefBrowser, function()
+        cefBrowserReady = true
+        pushCefState()
+    end)
+
+    addEventHandler("onClientRender", root, drawCefBrowser)
+    cacheEvent("cefRender", drawCefBrowser)
+else
+    outputChatBox("[Engine] Не удалось создать CEF-браузер.", 255, 0, 0)
+end
+
+outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
