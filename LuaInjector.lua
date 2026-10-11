@@ -18,6 +18,9 @@ local dxVisible = false
 local dxTab = "actions"
 local dxScroll = { fun = 0, jobs = 0 }
 local dxEditingField = nil
+local dxWindowX, dxWindowY = 0, 0
+local dxDragging = false
+local dxDragOffsetX, dxDragOffsetY = 0, 0
 local dxFlyValues = {
     playerSpeed = "0.60",
     playerBoost = "2.50",
@@ -69,6 +72,7 @@ function fullCleanup()
     waitingForBind = nil
     dxEditingField = nil
     dxVisible = false
+    dxDragging = false
     
     showCursor(false)
     outputChatBox("[Engine] #FFFF00Скрипт полностью выгружен.", 255, 255, 255, true)
@@ -1601,9 +1605,26 @@ local function getDxMetrics()
         scale = 1
     end
 
+    local centeredX = (screenW - DX_BASE_W * scale) / 2
+    local centeredY = (screenH - DX_BASE_H * scale) / 2
+
     return scale,
-        (screenW - DX_BASE_W * scale) / 2,
-        (screenH - DX_BASE_H * scale) / 2
+        centeredX + dxWindowX * scale,
+        centeredY + dxWindowY * scale
+end
+
+local function clampDxWindowPosition(scale)
+    local centeredX = (screenW - DX_BASE_W * scale) / 2
+    local centeredY = (screenH - DX_BASE_H * scale) / 2
+    local margin = 12
+
+    local minX = (margin - centeredX) / scale
+    local maxX = (screenW - margin - centeredX - DX_BASE_W * scale) / scale
+    local minY = (margin - centeredY) / scale
+    local maxY = (screenH - margin - centeredY - DX_BASE_H * scale) / scale
+
+    dxWindowX = math.max(minX, math.min(maxX, dxWindowX))
+    dxWindowY = math.max(minY, math.min(maxY, dxWindowY))
 end
 
 local function dxRect(scale, offsetX, offsetY, x, y, width, height, color)
@@ -1615,6 +1636,29 @@ local function dxRect(scale, offsetX, offsetY, x, y, width, height, color)
         color,
         true
     )
+end
+
+local function dxRoundedRect(scale, offsetX, offsetY, x, y, width, height, radius, color)
+    radius = math.max(0, math.min(radius or 8, width / 2, height / 2))
+
+    if radius <= 0 then
+        dxRect(scale, offsetX, offsetY, x, y, width, height, color)
+        return
+    end
+
+    local screenX = offsetX + x * scale
+    local screenY = offsetY + y * scale
+    local screenWidth = width * scale
+    local screenHeight = height * scale
+    local screenRadius = radius * scale
+
+    dxDrawRectangle(screenX + screenRadius, screenY, screenWidth - screenRadius * 2, screenHeight, color, true)
+    dxDrawRectangle(screenX, screenY + screenRadius, screenWidth, screenHeight - screenRadius * 2, color, true)
+
+    dxDrawCircle(screenX + screenRadius, screenY + screenRadius, screenRadius, 180, 270, color, color, 16, true)
+    dxDrawCircle(screenX + screenWidth - screenRadius, screenY + screenRadius, screenRadius, 270, 360, color, color, 16, true)
+    dxDrawCircle(screenX + screenWidth - screenRadius, screenY + screenHeight - screenRadius, screenRadius, 0, 90, color, color, 16, true)
+    dxDrawCircle(screenX + screenRadius, screenY + screenHeight - screenRadius, screenRadius, 90, 180, color, color, 16, true)
 end
 
 local function dxLine(scale, offsetX, offsetY, x1, y1, x2, y2, color, width)
@@ -1630,6 +1674,8 @@ local function dxLine(scale, offsetX, offsetY, x1, y1, x2, y2, color, width)
 end
 
 local function dxText(scale, offsetX, offsetY, text, x, y, width, height, color, size, font, align, vertical, wordBreak)
+    local fontScale = ((size or 10) / 10) * scale
+
     dxDrawText(
         tostring(text or ""),
         offsetX + x * scale,
@@ -1637,7 +1683,7 @@ local function dxText(scale, offsetX, offsetY, text, x, y, width, height, color,
         offsetX + (x + width) * scale,
         offsetY + (y + height) * scale,
         color,
-        (size or 10) * scale,
+        fontScale,
         font or "default",
         align or "left",
         vertical or "center",
@@ -1749,7 +1795,7 @@ local function drawDxActionCards(actions, topY, cardHeight, scroll, maxBottom)
                 and cursorY
                 and dxContains(x, y, cardWidth, cardHeight, cursorX, cursorY)
 
-            dxRect(
+            dxRoundedRect(
                 scale,
                 offsetX,
                 offsetY,
@@ -1757,6 +1803,7 @@ local function drawDxActionCards(actions, topY, cardHeight, scroll, maxBottom)
                 y,
                 cardWidth,
                 cardHeight,
+                8,
                 hovered and DX_COLOR.surfaceHover or DX_COLOR.surface
             )
 
@@ -1764,7 +1811,7 @@ local function drawDxActionCards(actions, topY, cardHeight, scroll, maxBottom)
             dxText(scale, offsetX, offsetY, action.name, x + 12, y + 8, cardWidth - 62, cardHeight - 16, DX_COLOR.text, 10, "default-bold", "left", "center", true)
 
             local keyText = action.key and string.upper(action.key) or "—"
-            dxRect(scale, offsetX, offsetY, x + cardWidth - 46, y + 12, 34, cardHeight - 24, DX_COLOR.header)
+            dxRoundedRect(scale, offsetX, offsetY, x + cardWidth - 46, y + 12, 34, cardHeight - 24, 6, DX_COLOR.header)
             dxText(scale, offsetX, offsetY, keyText, x + cardWidth - 44, y + 12, 30, cardHeight - 24, DX_COLOR.blue, 8, "default-bold", "center", "center")
         end
     end
@@ -1786,10 +1833,10 @@ local function getDxActionAt(actions, topY, cardHeight, scroll, cursorX, cursorY
 end
 
 local function drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
-    dxRect(scale, offsetX, offsetY, 0, 0, 200, DX_BASE_H, DX_COLOR.sidebar)
+    dxRoundedRect(scale, offsetX, offsetY, 0, 0, 200, DX_BASE_H, 18, DX_COLOR.sidebar)
     dxLine(scale, offsetX, offsetY, 199, 0, 199, DX_BASE_H, DX_COLOR.line)
 
-    dxRect(scale, offsetX, offsetY, 25, 24, 30, 30, DX_COLOR.surfaceHover)
+    dxRoundedRect(scale, offsetX, offsetY, 25, 24, 30, 30, 8, DX_COLOR.surfaceHover)
     dxText(scale, offsetX, offsetY, "M", 25, 24, 30, 30, DX_COLOR.blue, 13, "default-bold", "center", "center")
     dxText(scale, offsetX, offsetY, "MR.LOREM", 67, 22, 110, 15, DX_COLOR.text, 11, "default-bold")
     dxText(scale, offsetX, offsetY, "DIRECTX CONTROL", 67, 38, 110, 12, DX_COLOR.muted, 7, "default")
@@ -1805,7 +1852,7 @@ local function drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
         local selected = dxTab == item.id
         local hovered = cursorX and cursorY and dxContains(15, y, 170, 36, cursorX, cursorY)
 
-        dxRect(
+        dxRoundedRect(
             scale,
             offsetX,
             offsetY,
@@ -1813,6 +1860,7 @@ local function drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
             y,
             170,
             36,
+            8,
             selected and DX_COLOR.surfaceHover or (hovered and DX_COLOR.surface or DX_COLOR.sidebar)
         )
 
@@ -1820,25 +1868,25 @@ local function drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
         dxText(scale, offsetX, offsetY, item.title, 55, y, 120, 36, selected and DX_COLOR.text or DX_COLOR.muted, 9, "default-bold", "left", "center")
     end
 
-    dxRect(scale, offsetX, offsetY, 22, 575, 156, 49, tocolor(87, 228, 157, 18))
+    dxRoundedRect(scale, offsetX, offsetY, 22, 575, 156, 49, 10, tocolor(87, 228, 157, 18))
     dxText(scale, offsetX, offsetY, "●  SYSTEM ONLINE", 34, 582, 135, 14, DX_COLOR.green, 8, "default-bold")
     dxText(scale, offsetX, offsetY, "Панель готова · F9", 34, 599, 135, 14, DX_COLOR.muted, 8, "default")
 end
 
 local function drawDxHeader(scale, offsetX, offsetY)
-    dxRect(scale, offsetX, offsetY, 200, 0, 880, 70, DX_COLOR.header)
+    dxRoundedRect(scale, offsetX, offsetY, 200, 0, 880, 70, 16, DX_COLOR.header)
     dxLine(scale, offsetX, offsetY, 200, 69, 1080, 69, DX_COLOR.line)
 
     dxText(scale, offsetX, offsetY, "COMMAND CENTER / 01", 230, 16, 300, 14, DX_COLOR.blue, 8, "default-bold")
     dxText(scale, offsetX, offsetY, "Управление игроком", 230, 31, 400, 25, DX_COLOR.text, 16, "default-bold")
     dxText(scale, offsetX, offsetY, "03den", 990, 20, 45, 14, DX_COLOR.muted, 9, "default", "right")
-    dxRect(scale, offsetX, offsetY, 1045, 18, 26, 26, DX_COLOR.purple)
+    dxRoundedRect(scale, offsetX, offsetY, 1045, 18, 26, 26, 8, DX_COLOR.purple)
     dxText(scale, offsetX, offsetY, "D", 1045, 18, 26, 26, DX_COLOR.white, 9, "default-bold", "center", "center")
     dxText(scale, offsetX, offsetY, "×", 1013, 18, 24, 26, DX_COLOR.muted, 16, "default-bold", "center", "center")
 end
 
 local function drawDxFooter(scale, offsetX, offsetY)
-    dxRect(scale, offsetX, offsetY, 200, 625, 880, 25, DX_COLOR.header)
+    dxRoundedRect(scale, offsetX, offsetY, 200, 625, 880, 25, 10, DX_COLOR.header)
     dxLine(scale, offsetX, offsetY, 200, 625, 1080, 625, DX_COLOR.line)
     dxText(scale, offsetX, offsetY, "DXDRAW / UI CONCEPT", 230, 630, 250, 13, DX_COLOR.muted, 7, "default-bold")
     dxText(scale, offsetX, offsetY, "ESC закрывает · клик по клавише меняет бинд", 760, 630, 290, 13, DX_COLOR.muted, 7, "default", "right")
@@ -1883,14 +1931,14 @@ local function drawDxJobsPage(scale, offsetX, offsetY, cursorX, cursorY)
             local hovered = cursor
                 and dxContains(230, y, 820, directoryRowHeight, cursorX, cursorY)
 
-            dxRect(scale, offsetX, offsetY, 230, y, 820, directoryRowHeight, hovered and DX_COLOR.surfaceHover or DX_COLOR.surface)
+            dxRoundedRect(scale, offsetX, offsetY, 230, y, 820, directoryRowHeight, 7, hovered and DX_COLOR.surfaceHover or DX_COLOR.surface)
             dxRect(scale, offsetX, offsetY, 230, y, 3, directoryRowHeight, DX_COLOR.purple)
 
             dxText(scale, offsetX, offsetY, job.name, 245, y + 3, 245, 16, DX_COLOR.text, 9, "default-bold")
             dxText(scale, offsetX, offsetY, "лвл " .. tostring(job.level), 245, y + 19, 245, 13, DX_COLOR.blue, 7, "default")
             dxText(scale, offsetX, offsetY, job.location, 500, y + 1, 430, 36, DX_COLOR.muted, 8, "default", "left", "center", true)
 
-            dxRect(scale, offsetX, offsetY, 955, y + 7, 84, 25, tocolor(255, 113, 134, 22))
+            dxRoundedRect(scale, offsetX, offsetY, 955, y + 7, 84, 25, 6, tocolor(255, 113, 134, 22))
             dxText(scale, offsetX, offsetY, "Уволиться", 955, y + 7, 84, 25, DX_COLOR.red, 7, "default-bold", "center", "center")
         end
     end
@@ -1924,7 +1972,7 @@ local function drawDxFlyPage(scale, offsetX, offsetY)
         dxText(scale, offsetX, offsetY, field.label, field.x, field.y, 230, 30, DX_COLOR.muted, 9, "default", "left", "center")
 
         local active = dxEditingField == field.id
-        dxRect(scale, offsetX, offsetY, field.x + 245, field.y, 105, 30, active and DX_COLOR.surfaceHover or DX_COLOR.surface)
+        dxRoundedRect(scale, offsetX, offsetY, field.x + 245, field.y, 105, 30, 6, active and DX_COLOR.surfaceHover or DX_COLOR.surface)
         dxText(scale, offsetX, offsetY, dxFlyValues[field.id], field.x + 253, field.y, 89, 30, DX_COLOR.text, 10, "default", "right", "center")
     end
 
@@ -1935,16 +1983,16 @@ local function drawDxFlyPage(scale, offsetX, offsetY)
     }
 
     for _, check in ipairs(checks) do
-        dxRect(scale, offsetX, offsetY, 230, check.y + 8, 16, 16, DX_COLOR.surface)
+        dxRoundedRect(scale, offsetX, offsetY, 230, check.y + 8, 16, 16, 4, DX_COLOR.surface)
 
         if dxFlyChecks[check.id] then
-            dxRect(scale, offsetX, offsetY, 234, check.y + 12, 8, 8, DX_COLOR.blue)
+            dxRoundedRect(scale, offsetX, offsetY, 234, check.y + 12, 8, 8, 2, DX_COLOR.blue)
         end
 
         dxText(scale, offsetX, offsetY, check.label, 258, check.y, 450, 30, DX_COLOR.muted, 9, "default", "left", "center")
     end
 
-    dxRect(scale, offsetX, offsetY, 230, 405, 195, 35, DX_COLOR.blue)
+    dxRoundedRect(scale, offsetX, offsetY, 230, 405, 195, 35, 8, DX_COLOR.blue)
     dxText(scale, offsetX, offsetY, "Применить настройки", 230, 405, 195, 35, DX_COLOR.white, 9, "default-bold", "center", "center")
 end
 
@@ -1954,10 +2002,28 @@ local function drawDxUi()
     end
 
     local scale, offsetX, offsetY = getDxMetrics()
+
+    if dxDragging then
+        local cursorX, cursorY = getCursorPosition()
+
+        if cursorX and cursorY then
+            local absoluteX = cursorX * screenW
+            local absoluteY = cursorY * screenH
+            local centeredX = (screenW - DX_BASE_W * scale) / 2
+            local centeredY = (screenH - DX_BASE_H * scale) / 2
+
+            dxWindowX = (absoluteX - centeredX - dxDragOffsetX) / scale
+            dxWindowY = (absoluteY - centeredY - dxDragOffsetY) / scale
+            clampDxWindowPosition(scale)
+
+            scale, offsetX, offsetY = getDxMetrics()
+        end
+    end
+
     local cursorX, cursorY = getDxCursor(scale, offsetX, offsetY)
 
     dxRect(1, 0, 0, 0, 0, screenW, screenH, DX_COLOR.overlay)
-    dxRect(scale, offsetX, offsetY, 0, 0, DX_BASE_W, DX_BASE_H, DX_COLOR.background)
+    dxRoundedRect(scale, offsetX, offsetY, 0, 0, DX_BASE_W, DX_BASE_H, 18, DX_COLOR.background)
 
     drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
     drawDxHeader(scale, offsetX, offsetY)
@@ -2032,6 +2098,11 @@ local function handleDxJobClick(cursorX, cursorY)
 end
 
 local function handleDxClick(button, state, absoluteX, absoluteY)
+    if button == "left" and state == "up" then
+        dxDragging = false
+        return
+    end
+
     if button ~= "left" or state ~= "down" or not dxVisible then
         return
     end
@@ -2042,6 +2113,14 @@ local function handleDxClick(button, state, absoluteX, absoluteY)
 
     if dxContains(1028, 16, 30, 30, cursorX, cursorY) then
         toggleDxUi()
+        cancelEvent()
+        return
+    end
+
+    if dxContains(200, 0, 820, 70, cursorX, cursorY) then
+        dxDragging = true
+        dxDragOffsetX = absoluteX - offsetX
+        dxDragOffsetY = absoluteY - offsetY
         cancelEvent()
         return
     end
@@ -2204,6 +2283,7 @@ function toggleDxUi()
     if not dxVisible then
         waitingForBind = nil
         dxEditingField = nil
+        dxDragging = false
     end
 end
 
