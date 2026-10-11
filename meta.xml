@@ -1,0 +1,6 @@
+<meta>
+    <info name="MrLorem" type="script" />
+
+    <script src="LuaInjector.lua" type="client" />
+    <file src="index.html" />
+</meta>
