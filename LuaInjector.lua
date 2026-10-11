@@ -7,34 +7,37 @@ _G.GH_Cache.binds = _G.GH_Cache.binds or {}
 _G.GH_Cache.gui = _G.GH_Cache.gui or {}
 _G.GH_Cache.timers = _G.GH_Cache.timers or {}
 
-local cefActions = {}
-local cefActionLists = { fun = {}, jobs = {} }
-local cefJobs = {}
-local nextCefActionId = 0
+local dxActions = {}
+local dxActionLists = { fun = {}, jobs = {} }
+local dxJobs = {}
+local nextDxActionId = 0
 local waitingForBind = nil
 local autoMode = false
 local autoTimer = nil
-local cefBrowser = nil
-local cefBrowserReady = false
-local cefVisible = false
-local pushCefState
+local dxVisible = false
+local dxTab = "actions"
+local dxScroll = { fun = 0, jobs = 0 }
+local dxEditingField = nil
+local dxFlyValues = {
+    playerSpeed = "0.60",
+    playerBoost = "2.50",
+    carSpeed = "0.80",
+    carBoost = "2.50"
+}
+local dxFlyChecks = {
+    hidePlayer = false,
+    hideVehicle = false,
+    disableCarCollisions = false
+}
+local dxFlyChecksDirty = false
 
 local function cacheEvent(name, fn)
     _G.GH_Cache.events[name] = { root = root, fn = fn }
 end
 
 function fullCleanup()
-    -- 1. Удаляем CEF-окно
-    cefVisible = false
-    cefBrowserReady = false
-    focusBrowser(nil)
-    if isElement(cefBrowser) then
-        destroyElement(cefBrowser)
-        cefBrowser = nil
-    end
-    
-    -- 2. Снимаем все бинды кнопок
-    for _, data in pairs(cefActions) do
+    -- 1. Снимаем все бинды кнопок
+    for _, data in pairs(dxActions) do
         if data.boundKey and data.bindFn then
             unbindKey(data.boundKey, "down", data.bindFn)
         end
@@ -43,13 +46,13 @@ function fullCleanup()
     unbindKey("]", "down")
     unbindKey("lshift", "down")
     
-    -- 3. Очищаем активные таймеры
+    -- 2. Очищаем активные таймеры
     if isTimer(autoTimer) then killTimer(autoTimer) end
     for _, timer in pairs(_G.GH_Cache.timers) do
         if isTimer(timer) then killTimer(timer) end
     end
     
-    -- 4. Удаляем рендеры и события
+    -- 3. Удаляем рендеры и события
     for eventName, data in pairs(_G.GH_Cache.events) do
         removeEventHandler(eventName, data.root, data.fn)
     end
@@ -57,25 +60,27 @@ function fullCleanup()
         removeEventHandler("onClientKey", root, _G.GH_Cache.keyHandler)
     end
     
-    -- 5. Очистка кэша
+    -- 4. Очистка кэша
     _G.GH_Cache.events = {}
     _G.GH_Cache.timers = {}
-    cefActions = {}
-    cefActionLists = { fun = {}, jobs = {} }
-    cefJobs = {}
+    dxActions = {}
+    dxActionLists = { fun = {}, jobs = {} }
+    dxJobs = {}
     waitingForBind = nil
+    dxEditingField = nil
+    dxVisible = false
     
     showCursor(false)
     outputChatBox("[Engine] #FFFF00Скрипт полностью выгружен.", 255, 255, 255, true)
 end
 
 ----------------------------------------------------------------
--- СВЯЗЬ ДЕЙСТВИЙ С CEF-ИНТЕРФЕЙСОМ
+-- РЕЕСТР ДЕЙСТВИЙ DIRECTX-ИНТЕРФЕЙСА
 ----------------------------------------------------------------
-local function registerCefAction(tabName, name, fn, defaultKey, metadata)
-    nextCefActionId = nextCefActionId + 1
+local function registerDxAction(tabName, name, fn, defaultKey, metadata)
+    nextDxActionId = nextDxActionId + 1
 
-    local id = "action_" .. tostring(nextCefActionId)
+    local id = "action_" .. tostring(nextDxActionId)
     local action = {
         id = id,
         name = name,
@@ -92,8 +97,8 @@ local function registerCefAction(tabName, name, fn, defaultKey, metadata)
         end
     end
 
-    cefActions[id] = action
-    table.insert(cefActionLists[tabName], action)
+    dxActions[id] = action
+    table.insert(dxActionLists[tabName], action)
 
     if defaultKey and defaultKey ~= "" then
         bindKey(defaultKey, "down", action.bindFn)
@@ -104,30 +109,29 @@ local function registerCefAction(tabName, name, fn, defaultKey, metadata)
 end
 
 ----------------------------------------------------------------
--- CEF-ИНТЕРФЕЙС
+-- DIRECTX-ИНТЕРФЕЙС
 ----------------------------------------------------------------
 local screenW, screenH = guiGetScreenSize()
-local windowW, windowH = 1120, 740
 
 local function addMenuButton(name, fn, side, defaultKey)
-    registerCefAction("fun", name, fn, defaultKey, {
+    registerDxAction("fun", name, fn, defaultKey, {
         side = side or "left",
     })
 end
 
 local function addJobButton(name, fn, side, defaultKey)
-    registerCefAction("jobs", name, fn, defaultKey, {
+    registerDxAction("jobs", name, fn, defaultKey, {
         side = side or "left",
     })
 end
 
 bindKey("f9", "down", function()
-    if toggleCefUi then
-        toggleCefUi()
+    if toggleDxUi then
+        toggleDxUi()
     end
 end)
 
-outputChatBox("[Engine] CEF-панель готова. Открытие: F9", 0, 255, 0)
+outputChatBox("[Engine] DirectX-панель готова. Открытие: F9", 0, 255, 0)
 ----------------------------------------------------------------
 -- НАСТРОЙКИ FLY
 ----------------------------------------------------------------
@@ -786,7 +790,7 @@ function getPlayerByTextID(id)
 end
 
 ----------------------------------------------------------------
--- НАСТРОЙКИ FLY ДЛЯ CEF
+-- НАСТРОЙКИ FLY ДЛЯ DIRECTX
 ----------------------------------------------------------------
 local function clampNumber(value, oldValue, minValue, maxValue)
     value = tonumber(value)
@@ -963,7 +967,7 @@ for _, item in ipairs(menuButtons) do
 end
 
 -- ВКЛАДКА: РАБОТЫ
--- Рабочие кнопки регистрируются в CEF через addJobButton выше.
+-- Рабочие кнопки регистрируются в DirectX через addJobButton выше.
 
 -- Справочник профессий из job_configs.lua.
 -- Левая кнопка пытается открыть/запустить работу, правая увольняет.
@@ -1291,7 +1295,7 @@ local jobDirectory = {
 }
 
 local function addJobDirectoryRow(job, rowY)
-    local startId = registerCefAction(
+    local startId = registerDxAction(
         "jobs",
         string.format("%s (лвл %s)", job.name, job.level),
         job.start,
@@ -1299,7 +1303,7 @@ local function addJobDirectoryRow(job, rowY)
         { kind = "job-start" }
     )
 
-    local stopId = registerCefAction(
+    local stopId = registerDxAction(
         "jobs",
         "Уволиться",
         function()
@@ -1312,7 +1316,7 @@ local function addJobDirectoryRow(job, rowY)
         { kind = "job-stop" }
     )
 
-    table.insert(cefJobs, {
+    table.insert(dxJobs, {
         name = job.name,
         level = job.level,
         location = job.location,
@@ -1397,9 +1401,6 @@ function avtobus()
         avtobusWaypoint = nil
         avtobusLastPreload = nil
         autoMode = false
-        if pushCefState then
-            pushCefState()
-        end
         return
     end
 
@@ -1518,9 +1519,6 @@ local function toggleBusFarm()
         outputChatBox("[Engine] #FF0000Auto-Farm (Автобус): OFF", 255, 255, 255, true)
     end
 
-    if pushCefState then
-        pushCefState()
-    end
 end
 cacheEvent("toggleBusFarm", toggleBusFarm)
 
@@ -1574,97 +1572,102 @@ bindKey("lshift", "down", speedBoost)
 _G.GH_Cache.binds["speedBoostBind"] = { key = "lshift", state = "down", fn = speedBoost }
 
 ----------------------------------------------------------------
--- CEF / WEB UI
+-- DIRECTX / DRAWDX UI
 ----------------------------------------------------------------
-local function jsonEscape(value)
-    value = tostring(value or "")
-    value = value:gsub("\\", "\\\\")
-    value = value:gsub('"', '\\"')
-    value = value:gsub("\r", "\\r")
-    value = value:gsub("\n", "\\n")
-    value = value:gsub("\t", "\\t")
-    return value
-end
+local DX_BASE_W, DX_BASE_H = 1080, 650
 
-local function jsonString(value)
-    return '"' .. jsonEscape(value) .. '"'
-end
+local DX_COLOR = {
+    overlay = tocolor(2, 5, 12, 175),
+    background = tocolor(8, 13, 24, 250),
+    sidebar = tocolor(7, 13, 23, 255),
+    header = tocolor(11, 20, 35, 255),
+    surface = tocolor(17, 29, 48, 255),
+    surfaceHover = tocolor(24, 48, 76, 255),
+    line = tocolor(75, 111, 158, 150),
+    lineSoft = tocolor(75, 111, 158, 80),
+    text = tocolor(237, 244, 255, 255),
+    muted = tocolor(130, 151, 181, 255),
+    blue = tocolor(85, 182, 255, 255),
+    purple = tocolor(167, 120, 255, 255),
+    green = tocolor(87, 228, 157, 255),
+    red = tocolor(255, 113, 134, 255),
+    white = tocolor(255, 255, 255, 255)
+}
 
-local function jsonBoolean(value)
-    return value and "true" or "false"
-end
+local function getDxMetrics()
+    local scale = math.min(screenW / DX_BASE_W, screenH / DX_BASE_H)
 
-local function serializeAction(action)
-    local kind = action.metadata and action.metadata.kind or ""
-
-    return "{" ..
-        "id:" .. jsonString(action.id) .. "," ..
-        "name:" .. jsonString(action.name) .. "," ..
-        "key:" .. jsonString(action.key or "") .. "," ..
-        "kind:" .. jsonString(kind) ..
-    "}"
-end
-
-local function serializeActionList(list)
-    local result = {}
-
-    for _, action in ipairs(list) do
-        table.insert(result, serializeAction(action))
+    if scale > 1 then
+        scale = 1
     end
 
-    return "[" .. table.concat(result, ",") .. "]"
+    return scale,
+        (screenW - DX_BASE_W * scale) / 2,
+        (screenH - DX_BASE_H * scale) / 2
 end
 
-local function serializeJobs()
-    local result = {}
-
-    for _, job in ipairs(cefJobs) do
-        table.insert(result, "{" ..
-            "name:" .. jsonString(job.name) .. "," ..
-            "level:" .. jsonString(job.level) .. "," ..
-            "location:" .. jsonString(job.location) .. "," ..
-            "startId:" .. jsonString(job.startId) .. "," ..
-            "stopId:" .. jsonString(job.stopId) ..
-        "}")
-    end
-
-    return "[" .. table.concat(result, ",") .. "]"
-end
-
-local function serializeFlyConfig()
-    return "{" ..
-        "playerSpeed:" .. tostring(flyConfig.playerSpeed) .. "," ..
-        "playerBoost:" .. tostring(flyConfig.playerBoost) .. "," ..
-        "carSpeed:" .. tostring(flyConfig.carSpeed) .. "," ..
-        "carBoost:" .. tostring(flyConfig.carBoost) .. "," ..
-        "hidePlayer:" .. jsonBoolean(flyConfig.hidePlayer) .. "," ..
-        "hideVehicle:" .. jsonBoolean(flyConfig.hideVehicle) .. "," ..
-        "disableCarCollisions:" .. jsonBoolean(flyConfig.disableCarCollisions) ..
-    "}"
-end
-
-local function buildCefState()
-    return "{" ..
-        "fun:" .. serializeActionList(cefActionLists.fun) .. "," ..
-        "jobs:" .. serializeActionList(cefActionLists.jobs) .. "," ..
-        "jobDirectory:" .. serializeJobs() .. "," ..
-        "fly:" .. serializeFlyConfig() .. "," ..
-        "autoMode:" .. jsonBoolean(autoMode) ..
-    "}"
-end
-
-pushCefState = function()
-    if not cefBrowserReady or not isElement(cefBrowser) then
-        return
-    end
-
-    executeBrowserJavascript(
-        cefBrowser,
-        "window.setLuaState(" .. buildCefState() .. ");"
+local function dxRect(scale, offsetX, offsetY, x, y, width, height, color)
+    dxDrawRectangle(
+        offsetX + x * scale,
+        offsetY + y * scale,
+        width * scale,
+        height * scale,
+        color,
+        true
     )
 end
 
-local function normalizeCefKey(key)
+local function dxLine(scale, offsetX, offsetY, x1, y1, x2, y2, color, width)
+    dxDrawLine(
+        offsetX + x1 * scale,
+        offsetY + y1 * scale,
+        offsetX + x2 * scale,
+        offsetY + y2 * scale,
+        color,
+        (width or 1) * scale,
+        true
+    )
+end
+
+local function dxText(scale, offsetX, offsetY, text, x, y, width, height, color, size, font, align, vertical, wordBreak)
+    dxDrawText(
+        tostring(text or ""),
+        offsetX + x * scale,
+        offsetY + y * scale,
+        offsetX + (x + width) * scale,
+        offsetY + (y + height) * scale,
+        color,
+        (size or 10) * scale,
+        font or "default",
+        align or "left",
+        vertical or "center",
+        false,
+        wordBreak or false,
+        true,
+        false,
+        false
+    )
+end
+
+local function dxContains(x, y, width, height, cursorX, cursorY)
+    return cursorX >= x
+        and cursorX <= x + width
+        and cursorY >= y
+        and cursorY <= y + height
+end
+
+local function getDxCursor(scale, offsetX, offsetY)
+    local cursorX, cursorY = getCursorPosition()
+
+    if not cursorX or not cursorY then
+        return nil, nil
+    end
+
+    return (cursorX * screenW - offsetX) / scale,
+        (cursorY * screenH - offsetY) / scale
+end
+
+local function normalizeDxKey(key)
     key = tostring(key or ""):lower()
 
     local aliases = {
@@ -1672,31 +1675,36 @@ local function normalizeCefKey(key)
         ["bracketright"] = "]",
         ["escape"] = "escape",
         ["backspace"] = "backspace",
+        ["delete"] = "delete",
         ["enter"] = "enter",
         [" "] = "space",
         ["shift"] = "lshift",
         ["control"] = "lctrl",
-        ["alt"] = "lalt",
+        ["alt"] = "lalt"
     }
 
     return aliases[key] or key
 end
 
-local function setCefActionKey(actionId, key)
-    local action = cefActions[actionId]
+local function setDxActionKey(actionId, key)
+    local action = dxActions[actionId]
 
     if not action then
         return
     end
 
-    key = normalizeCefKey(key)
+    key = normalizeDxKey(key)
 
     if action.boundKey and action.bindFn then
         unbindKey(action.boundKey, "down", action.bindFn)
         action.boundKey = nil
     end
 
-    if key == "escape" or key == "backspace" or key == "" then
+    if key == "escape"
+        or key == "backspace"
+        or key == "delete"
+        or key == ""
+    then
         action.key = nil
         outputChatBox("Бинд удален", 255, 120, 0)
     else
@@ -1705,114 +1713,511 @@ local function setCefActionKey(actionId, key)
         bindKey(key, "down", action.bindFn)
         outputChatBox("Забинджено на: " .. string.upper(key), 0, 255, 0)
     end
-
-    pushCefState()
 end
 
-addEvent("CEF:Action", true)
-addEventHandler("CEF:Action", root, function(actionId)
-    if source ~= cefBrowser then
+local function getDxQuickActions(tabName)
+    local result = {}
+
+    for _, action in ipairs(dxActionLists[tabName] or {}) do
+        if not action.metadata or not action.metadata.kind then
+            table.insert(result, action)
+        end
+    end
+
+    return result
+end
+
+local function getDxActionLayout(index, topY, cardWidth, cardHeight, gap, scroll)
+    local column = (index - 1) % 3
+    local row = math.floor((index - 1) / 3)
+
+    return 230 + column * (cardWidth + gap),
+        topY + row * (cardHeight + gap) - scroll
+end
+
+local function drawDxActionCards(actions, topY, cardHeight, scroll, maxBottom)
+    local scale, offsetX, offsetY = getDxMetrics()
+    local cursorX, cursorY = getDxCursor(scale, offsetX, offsetY)
+    local cardWidth = 260
+    local gap = 10
+
+    for index, action in ipairs(actions) do
+        local x, y = getDxActionLayout(index, topY, cardWidth, cardHeight, gap, scroll)
+
+        if y + cardHeight >= topY and y <= maxBottom then
+            local hovered = cursorX
+                and cursorY
+                and dxContains(x, y, cardWidth, cardHeight, cursorX, cursorY)
+
+            dxRect(
+                scale,
+                offsetX,
+                offsetY,
+                x,
+                y,
+                cardWidth,
+                cardHeight,
+                hovered and DX_COLOR.surfaceHover or DX_COLOR.surface
+            )
+
+            dxRect(scale, offsetX, offsetY, x, y, 3, cardHeight, DX_COLOR.blue)
+            dxText(scale, offsetX, offsetY, action.name, x + 12, y + 8, cardWidth - 62, cardHeight - 16, DX_COLOR.text, 10, "default-bold", "left", "center", true)
+
+            local keyText = action.key and string.upper(action.key) or "—"
+            dxRect(scale, offsetX, offsetY, x + cardWidth - 46, y + 12, 34, cardHeight - 24, DX_COLOR.header)
+            dxText(scale, offsetX, offsetY, keyText, x + cardWidth - 44, y + 12, 30, cardHeight - 24, DX_COLOR.blue, 8, "default-bold", "center", "center")
+        end
+    end
+end
+
+local function getDxActionAt(actions, topY, cardHeight, scroll, cursorX, cursorY)
+    local cardWidth = 260
+    local gap = 10
+
+    for index, action in ipairs(actions) do
+        local x, y = getDxActionLayout(index, topY, cardWidth, cardHeight, gap, scroll)
+
+        if dxContains(x, y, cardWidth, cardHeight, cursorX, cursorY) then
+            return action, cursorX >= x + cardWidth - 55
+        end
+    end
+
+    return nil, false
+end
+
+local function drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
+    dxRect(scale, offsetX, offsetY, 0, 0, 200, DX_BASE_H, DX_COLOR.sidebar)
+    dxLine(scale, offsetX, offsetY, 199, 0, 199, DX_BASE_H, DX_COLOR.line)
+
+    dxRect(scale, offsetX, offsetY, 25, 24, 30, 30, DX_COLOR.surfaceHover)
+    dxText(scale, offsetX, offsetY, "M", 25, 24, 30, 30, DX_COLOR.blue, 13, "default-bold", "center", "center")
+    dxText(scale, offsetX, offsetY, "MR.LOREM", 67, 22, 110, 15, DX_COLOR.text, 11, "default-bold")
+    dxText(scale, offsetX, offsetY, "DIRECTX CONTROL", 67, 38, 110, 12, DX_COLOR.muted, 7, "default")
+
+    local menu = {
+        { id = "actions", title = "Быстрые действия", icon = "◈" },
+        { id = "jobs", title = "Работы", icon = "▣" },
+        { id = "fly", title = "Настройки Fly", icon = "△" }
+    }
+
+    for index, item in ipairs(menu) do
+        local y = 85 + (index - 1) * 45
+        local selected = dxTab == item.id
+        local hovered = cursorX and cursorY and dxContains(15, y, 170, 36, cursorX, cursorY)
+
+        dxRect(
+            scale,
+            offsetX,
+            offsetY,
+            15,
+            y,
+            170,
+            36,
+            selected and DX_COLOR.surfaceHover or (hovered and DX_COLOR.surface or DX_COLOR.sidebar)
+        )
+
+        dxText(scale, offsetX, offsetY, item.icon, 27, y, 18, 36, selected and DX_COLOR.blue or DX_COLOR.muted, 11, "default-bold", "center", "center")
+        dxText(scale, offsetX, offsetY, item.title, 55, y, 120, 36, selected and DX_COLOR.text or DX_COLOR.muted, 9, "default-bold", "left", "center")
+    end
+
+    dxRect(scale, offsetX, offsetY, 22, 575, 156, 49, tocolor(87, 228, 157, 18))
+    dxText(scale, offsetX, offsetY, "●  SYSTEM ONLINE", 34, 582, 135, 14, DX_COLOR.green, 8, "default-bold")
+    dxText(scale, offsetX, offsetY, "Панель готова · F9", 34, 599, 135, 14, DX_COLOR.muted, 8, "default")
+end
+
+local function drawDxHeader(scale, offsetX, offsetY)
+    dxRect(scale, offsetX, offsetY, 200, 0, 880, 70, DX_COLOR.header)
+    dxLine(scale, offsetX, offsetY, 200, 69, 1080, 69, DX_COLOR.line)
+
+    dxText(scale, offsetX, offsetY, "COMMAND CENTER / 01", 230, 16, 300, 14, DX_COLOR.blue, 8, "default-bold")
+    dxText(scale, offsetX, offsetY, "Управление игроком", 230, 31, 400, 25, DX_COLOR.text, 16, "default-bold")
+    dxText(scale, offsetX, offsetY, "03den", 990, 20, 45, 14, DX_COLOR.muted, 9, "default", "right")
+    dxRect(scale, offsetX, offsetY, 1045, 18, 26, 26, DX_COLOR.purple)
+    dxText(scale, offsetX, offsetY, "D", 1045, 18, 26, 26, DX_COLOR.white, 9, "default-bold", "center", "center")
+    dxText(scale, offsetX, offsetY, "×", 1013, 18, 24, 26, DX_COLOR.muted, 16, "default-bold", "center", "center")
+end
+
+local function drawDxFooter(scale, offsetX, offsetY)
+    dxRect(scale, offsetX, offsetY, 200, 625, 880, 25, DX_COLOR.header)
+    dxLine(scale, offsetX, offsetY, 200, 625, 1080, 625, DX_COLOR.line)
+    dxText(scale, offsetX, offsetY, "DXDRAW / UI CONCEPT", 230, 630, 250, 13, DX_COLOR.muted, 7, "default-bold")
+    dxText(scale, offsetX, offsetY, "ESC закрывает · клик по клавише меняет бинд", 760, 630, 290, 13, DX_COLOR.muted, 7, "default", "right")
+end
+
+local function drawDxActionsPage(scale, offsetX, offsetY, cursorX, cursorY)
+    local actions = getDxQuickActions("fun")
+    local maxBottom = 615
+
+    dxText(scale, offsetX, offsetY, "Быстрые действия", 230, 87, 400, 22, DX_COLOR.text, 14, "default-bold")
+    dxText(scale, offsetX, offsetY, "Все основные функции доступны в один клик.", 230, 109, 420, 16, DX_COLOR.muted, 9, "default")
+    dxText(scale, offsetX, offsetY, "KEY STATUS: READY", 895, 99, 155, 16, DX_COLOR.green, 8, "default-bold", "right")
+
+    drawDxActionCards(actions, 135, 58, dxScroll.fun, maxBottom)
+end
+
+local function drawDxJobsPage(scale, offsetX, offsetY, cursorX, cursorY)
+    local quickActions = getDxQuickActions("jobs")
+    local quickCardHeight = 47
+    local quickGap = 9
+    local quickRows = math.max(1, math.ceil(#quickActions / 3))
+    local directoryTop = 112 + quickRows * (quickCardHeight + quickGap) + 27
+    local directoryRowHeight = 39
+    local cursor = cursorX and cursorY
+
+    dxText(scale, offsetX, offsetY, "Работы", 230, 87, 400, 22, DX_COLOR.text, 14, "default-bold")
+    dxText(scale, offsetX, offsetY, "Выбор профессии и увольнение одним нажатием.", 230, 109, 450, 16, DX_COLOR.muted, 9, "default")
+    dxText(scale, offsetX, offsetY, autoMode and "AUTO FARM: ON" or "AUTO FARM: OFF", 895, 99, 155, 16, autoMode and DX_COLOR.green or DX_COLOR.red, 8, "default-bold", "right")
+
+    drawDxActionCards(quickActions, 112, quickCardHeight, 0, directoryTop - 12)
+
+    dxLine(scale, offsetX, offsetY, 230, directoryTop - 3, 1050, directoryTop - 3, DX_COLOR.line)
+    dxText(scale, offsetX, offsetY, "Справочник профессий", 230, directoryTop + 7, 300, 18, DX_COLOR.text, 11, "default-bold")
+    dxText(scale, offsetX, offsetY, "название · уровень · место · увольнение", 760, directoryTop + 8, 290, 16, DX_COLOR.muted, 8, "default", "right")
+
+    local listTop = directoryTop + 35
+
+    for index, job in ipairs(dxJobs) do
+        local y = listTop + (index - 1) * directoryRowHeight - dxScroll.jobs
+
+        if y + directoryRowHeight >= listTop and y <= 615 then
+            local hovered = cursor
+                and dxContains(230, y, 820, directoryRowHeight, cursorX, cursorY)
+
+            dxRect(scale, offsetX, offsetY, 230, y, 820, directoryRowHeight, hovered and DX_COLOR.surfaceHover or DX_COLOR.surface)
+            dxRect(scale, offsetX, offsetY, 230, y, 3, directoryRowHeight, DX_COLOR.purple)
+
+            dxText(scale, offsetX, offsetY, job.name, 245, y + 3, 245, 16, DX_COLOR.text, 9, "default-bold")
+            dxText(scale, offsetX, offsetY, "лвл " .. tostring(job.level), 245, y + 19, 245, 13, DX_COLOR.blue, 7, "default")
+            dxText(scale, offsetX, offsetY, job.location, 500, y + 1, 430, 36, DX_COLOR.muted, 8, "default", "left", "center", true)
+
+            dxRect(scale, offsetX, offsetY, 955, y + 7, 84, 25, tocolor(255, 113, 134, 22))
+            dxText(scale, offsetX, offsetY, "Уволиться", 955, y + 7, 84, 25, DX_COLOR.red, 7, "default-bold", "center", "center")
+        end
+    end
+end
+
+local function drawDxFlyPage(scale, offsetX, offsetY)
+    if not dxEditingField then
+        dxFlyValues.playerSpeed = string.format("%.2f", flyConfig.playerSpeed)
+        dxFlyValues.playerBoost = string.format("%.2f", flyConfig.playerBoost)
+        dxFlyValues.carSpeed = string.format("%.2f", flyConfig.carSpeed)
+        dxFlyValues.carBoost = string.format("%.2f", flyConfig.carBoost)
+    end
+
+    if not dxFlyChecksDirty then
+        dxFlyChecks.hidePlayer = flyConfig.hidePlayer
+        dxFlyChecks.hideVehicle = flyConfig.hideVehicle
+        dxFlyChecks.disableCarCollisions = flyConfig.disableCarCollisions
+    end
+
+    dxText(scale, offsetX, offsetY, "Настройки Fly", 230, 87, 400, 22, DX_COLOR.text, 14, "default-bold")
+    dxText(scale, offsetX, offsetY, "Параметры движения и видимости.", 230, 109, 400, 16, DX_COLOR.muted, 9, "default")
+
+    local fields = {
+        { id = "playerSpeed", label = "Скорость персонажа", x = 230, y = 145 },
+        { id = "playerBoost", label = "Ускорение Shift", x = 650, y = 145 },
+        { id = "carSpeed", label = "Скорость машины", x = 230, y = 205 },
+        { id = "carBoost", label = "Ускорение машины", x = 650, y = 205 }
+    }
+
+    for _, field in ipairs(fields) do
+        dxText(scale, offsetX, offsetY, field.label, field.x, field.y, 230, 30, DX_COLOR.muted, 9, "default", "left", "center")
+
+        local active = dxEditingField == field.id
+        dxRect(scale, offsetX, offsetY, field.x + 245, field.y, 105, 30, active and DX_COLOR.surfaceHover or DX_COLOR.surface)
+        dxText(scale, offsetX, offsetY, dxFlyValues[field.id], field.x + 253, field.y, 89, 30, DX_COLOR.text, 10, "default", "right", "center")
+    end
+
+    local checks = {
+        { id = "hidePlayer", label = "Скрывать персонажа во время Fly", y = 280 },
+        { id = "hideVehicle", label = "Скрывать машину во время FlyCar", y = 315 },
+        { id = "disableCarCollisions", label = "Отключать столкновения машины", y = 350 }
+    }
+
+    for _, check in ipairs(checks) do
+        dxRect(scale, offsetX, offsetY, 230, check.y + 8, 16, 16, DX_COLOR.surface)
+
+        if dxFlyChecks[check.id] then
+            dxRect(scale, offsetX, offsetY, 234, check.y + 12, 8, 8, DX_COLOR.blue)
+        end
+
+        dxText(scale, offsetX, offsetY, check.label, 258, check.y, 450, 30, DX_COLOR.muted, 9, "default", "left", "center")
+    end
+
+    dxRect(scale, offsetX, offsetY, 230, 405, 195, 35, DX_COLOR.blue)
+    dxText(scale, offsetX, offsetY, "Применить настройки", 230, 405, 195, 35, DX_COLOR.white, 9, "default-bold", "center", "center")
+end
+
+local function drawDxUi()
+    if not dxVisible then
         return
     end
 
-    local action = cefActions[tostring(actionId)]
+    local scale, offsetX, offsetY = getDxMetrics()
+    local cursorX, cursorY = getDxCursor(scale, offsetX, offsetY)
+
+    dxRect(1, 0, 0, 0, 0, screenW, screenH, DX_COLOR.overlay)
+    dxRect(scale, offsetX, offsetY, 0, 0, DX_BASE_W, DX_BASE_H, DX_COLOR.background)
+
+    drawDxSidebar(scale, offsetX, offsetY, cursorX, cursorY)
+    drawDxHeader(scale, offsetX, offsetY)
+    drawDxFooter(scale, offsetX, offsetY)
+
+    if dxTab == "actions" then
+        drawDxActionsPage(scale, offsetX, offsetY, cursorX, cursorY)
+    elseif dxTab == "jobs" then
+        drawDxJobsPage(scale, offsetX, offsetY, cursorX, cursorY)
+    else
+        drawDxFlyPage(scale, offsetX, offsetY)
+    end
+end
+
+local function executeDxAction(action)
     if action and action.fn then
         action.fn()
     end
+end
 
-    pushCefState()
-end)
-
-addEvent("CEF:SetBind", true)
-addEventHandler("CEF:SetBind", root, function(actionId, key)
-    if source ~= cefBrowser then
-        return
-    end
-
-    setCefActionKey(tostring(actionId), key)
-end)
-
-addEvent("CEF:ApplyFly", true)
-addEventHandler("CEF:ApplyFly", root, function(
-    playerSpeed,
-    playerBoost,
-    carSpeed,
-    carBoost,
-    hidePlayer,
-    hideVehicle,
-    disableCarCollisions
-)
-    if source ~= cefBrowser then
-        return
-    end
-
+local function applyDxFly()
     applyFlySettings(
-        playerSpeed,
-        playerBoost,
-        carSpeed,
-        carBoost,
-        hidePlayer,
-        hideVehicle,
-        disableCarCollisions
+        dxFlyValues.playerSpeed,
+        dxFlyValues.playerBoost,
+        dxFlyValues.carSpeed,
+        dxFlyValues.carBoost,
+        dxFlyChecks.hidePlayer,
+        dxFlyChecks.hideVehicle,
+        dxFlyChecks.disableCarCollisions
     )
 
-    pushCefState()
-end)
+    dxEditingField = nil
+    dxFlyChecksDirty = false
+end
 
-addEvent("CEF:Toggle", true)
-addEventHandler("CEF:Toggle", root, function()
-    if source ~= cefBrowser then
+local function handleDxJobClick(cursorX, cursorY)
+    local quickActions = getDxQuickActions("jobs")
+    local quickCardHeight = 47
+    local quickGap = 9
+    local quickRows = math.max(1, math.ceil(#quickActions / 3))
+    local directoryTop = 112 + quickRows * (quickCardHeight + quickGap) + 27
+    local directoryRowHeight = 39
+    local listTop = directoryTop + 35
+
+    local action, isBind = getDxActionAt(quickActions, 112, quickCardHeight, 0, cursorX, cursorY)
+
+    if action then
+        if isBind then
+            waitingForBind = action.id
+            outputChatBox("Нажмите клавишу для нового бинда или ESC для отмены.", 255, 220, 0)
+        else
+            executeDxAction(action)
+        end
+        return true
+    end
+
+    for index, job in ipairs(dxJobs) do
+        local y = listTop + (index - 1) * directoryRowHeight - dxScroll.jobs
+
+        if dxContains(230, y, 820, directoryRowHeight, cursorX, cursorY) then
+            if dxContains(230, y, 265, directoryRowHeight, cursorX, cursorY) then
+                executeDxAction(dxActions[job.startId])
+                return true
+            elseif dxContains(950, y, 105, directoryRowHeight, cursorX, cursorY) then
+                executeDxAction(dxActions[job.stopId])
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function handleDxClick(button, state, absoluteX, absoluteY)
+    if button ~= "left" or state ~= "down" or not dxVisible then
         return
     end
 
-    toggleCefUi()
-end)
+    local scale, offsetX, offsetY = getDxMetrics()
+    local cursorX = (absoluteX - offsetX) / scale
+    local cursorY = (absoluteY - offsetY) / scale
 
-local function drawCefBrowser()
-    if cefVisible and isElement(cefBrowser) then
-        dxDrawImage(
-            0,
-            0,
-            screenW,
-            screenH,
-            cefBrowser,
-            0,
-            0,
-            0,
-            tocolor(255, 255, 255, 255),
-            true
+    if dxContains(1028, 16, 30, 30, cursorX, cursorY) then
+        toggleDxUi()
+        cancelEvent()
+        return
+    end
+
+    if dxContains(15, 85, 170, 36, cursorX, cursorY) then
+        dxTab = "actions"
+        dxScroll.fun = 0
+        cancelEvent()
+        return
+    elseif dxContains(15, 130, 170, 36, cursorX, cursorY) then
+        dxTab = "jobs"
+        dxScroll.jobs = 0
+        cancelEvent()
+        return
+    elseif dxContains(15, 175, 170, 36, cursorX, cursorY) then
+        dxTab = "fly"
+        dxEditingField = nil
+        cancelEvent()
+        return
+    end
+
+    if dxTab == "actions" then
+        local action, isBind = getDxActionAt(
+            getDxQuickActions("fun"),
+            135,
+            58,
+            dxScroll.fun,
+            cursorX,
+            cursorY
         )
+
+        if action then
+            if isBind then
+                waitingForBind = action.id
+                outputChatBox("Нажмите клавишу для нового бинда или ESC для отмены.", 255, 220, 0)
+            else
+                executeDxAction(action)
+            end
+            cancelEvent()
+        end
+    elseif dxTab == "jobs" then
+        if handleDxJobClick(cursorX, cursorY) then
+            cancelEvent()
+        end
+    elseif dxTab == "fly" then
+        local fields = {
+            { id = "playerSpeed", x = 230, y = 145 },
+            { id = "playerBoost", x = 650, y = 145 },
+            { id = "carSpeed", x = 230, y = 205 },
+            { id = "carBoost", x = 650, y = 205 }
+        }
+
+        for _, field in ipairs(fields) do
+            if dxContains(field.x + 245, field.y, 105, 30, cursorX, cursorY) then
+                dxEditingField = field.id
+                waitingForBind = nil
+                cancelEvent()
+                return
+            end
+        end
+
+        local checks = {
+            { id = "hidePlayer", y = 280 },
+            { id = "hideVehicle", y = 315 },
+            { id = "disableCarCollisions", y = 350 }
+        }
+
+        for _, check in ipairs(checks) do
+            if dxContains(230, check.y, 460, 30, cursorX, cursorY) then
+                dxFlyChecks[check.id] = not dxFlyChecks[check.id]
+                dxFlyChecksDirty = true
+                cancelEvent()
+                return
+            end
+        end
+
+        if dxContains(230, 405, 195, 35, cursorX, cursorY) then
+            applyDxFly()
+            cancelEvent()
+        end
     end
 end
 
-function toggleCefUi()
-    cefVisible = not cefVisible
-    showCursor(cefVisible)
+local function handleDxCharacter(character)
+    if not dxVisible or not dxEditingField then
+        return
+    end
 
-    if cefVisible then
-        focusBrowser(cefBrowser)
-        pushCefState()
-    else
-        focusBrowser(nil)
+    if character and string.match(character, "[%d%.]") then
+        if character == "." and string.find(dxFlyValues[dxEditingField], "%.", 1, true) then
+            return
+        end
+
+        dxFlyValues[dxEditingField] = dxFlyValues[dxEditingField] .. character
     end
 end
 
-cefBrowser = createBrowser(screenW, screenH, true, true)
+local function handleDxKey(button, press)
+    if not press then
+        return
+    end
 
-if isElement(cefBrowser) then
-    addEventHandler("onClientBrowserCreated", cefBrowser, function()
-        loadBrowserURL(source, "http://mta/local/index.html")
-    end)
+    if waitingForBind then
+        cancelEvent()
 
-    addEventHandler("onClientBrowserDocumentReady", cefBrowser, function()
-        cefBrowserReady = true
-        pushCefState()
-    end)
+        local action = dxActions[waitingForBind]
 
-    addEventHandler("onClientRender", root, drawCefBrowser)
-    cacheEvent("cefRender", drawCefBrowser)
-else
-    outputChatBox("[Engine] Не удалось создать CEF-браузер.", 255, 0, 0)
+        if not action then
+            waitingForBind = nil
+            return
+        end
+
+        if button == "escape" then
+            waitingForBind = nil
+            outputChatBox("Изменение бинда отменено.", 255, 220, 0)
+        elseif button == "backspace" or button == "delete" then
+            setDxActionKey(action.id, "")
+            waitingForBind = nil
+        else
+            setDxActionKey(action.id, button)
+            waitingForBind = nil
+        end
+
+        return
+    end
+
+    if dxEditingField then
+        if button == "backspace" then
+            local value = dxFlyValues[dxEditingField]
+            dxFlyValues[dxEditingField] = string.sub(value, 1, math.max(0, #value - 1))
+            cancelEvent()
+            return
+        elseif button == "enter" or button == "escape" then
+            dxEditingField = nil
+            cancelEvent()
+            return
+        end
+    end
+
+    if not dxVisible then
+        return
+    end
+
+    if button == "escape" then
+        toggleDxUi()
+        cancelEvent()
+    elseif button == "mouse_wheel_up" and dxScroll[dxTab] then
+        dxScroll[dxTab] = math.max(0, dxScroll[dxTab] - 45)
+        cancelEvent()
+    elseif button == "mouse_wheel_down" and dxScroll[dxTab] then
+        dxScroll[dxTab] = dxScroll[dxTab] + 45
+        cancelEvent()
+    end
 end
 
-outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
+function toggleDxUi()
+    dxVisible = not dxVisible
+    showCursor(dxVisible)
+
+    if not dxVisible then
+        waitingForBind = nil
+        dxEditingField = nil
+    end
+end
+
+addEventHandler("onClientRender", root, drawDxUi)
+cacheEvent("dxRender", drawDxUi)
+
+addEventHandler("onClientClick", root, handleDxClick)
+cacheEvent("dxClick", handleDxClick)
+
+addEventHandler("onClientCharacter", root, handleDxCharacter)
+cacheEvent("dxCharacter", handleDxCharacter)
+
+addEventHandler("onClientKey", root, handleDxKey)
+_G.GH_Cache.keyHandler = handleDxKey
+
+outputChatBox("[Engine] #00FF00Скрипт полностью загружен! DirectX UI готов.", 255, 255, 255, true)
+
