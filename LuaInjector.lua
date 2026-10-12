@@ -1862,6 +1862,7 @@ local function speedBoostKeyDown()
     applySpeedBoost()
 
     stopSpeedBoostTimer()
+    
     speedBoostTimer = setTimer(function()
         if not speedBoostActive or toolConfig.speedBoostMode ~= "hold" then
             stopSpeedBoostTimer()
@@ -1893,3 +1894,925 @@ _G.GH_Cache.binds["speedBoostBind"] = {
 
 outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
 
+
+-- Standalone MTA:SA Event Dumper
+-- Native MTA GUI only
+-- F1  - open/close window
+-- Esc - close window
+
+local eventLines = {}
+local dumperWindow
+local eventMemo
+local infoLabel
+local clearButton
+local copyLastButton
+local copyButton
+local closeButton
+
+local hookInstalled = false
+local LOG_MAX_LINES = 3000
+local resourceStarted = false
+
+local ignoredEvents = {
+    ["CB:SetGroupHealthBuff"] = true,
+    ["onCaloriesUpdate"] = true,
+    ["lossHungryHealth"] = true,
+    ["OnPlayerWantGetPromoStatistics"] = true,
+    ["ChatStart"] = true,
+    ["ChatStop"] = true,
+    ["OnUpdateStaminaHandler"] = true,
+    ["Trade:Destroy"] = true,
+    ["loadVehicleDirtServer"] = true,
+    ["saveWindowsPositionServer"] = true,
+    ["afk:cancelByKey"] = true,
+    ["onPlayerAFKStateChange"] = true,
+}
+
+local function logDebug(message, level)
+    outputDebugString(
+        "[EventDumper] " .. tostring(message),
+        level or 3
+    )
+end
+
+local function quoteString(value)
+    return string.format("%q", tostring(value))
+end
+
+local function serializeArgument(value, depth, visited)
+    depth = depth or 0
+    visited = visited or {}
+
+    if value == nil then
+        return "nil"
+    end
+
+    if value == localPlayer then
+        return "localPlayer"
+    end
+
+    if value == root then
+        return "root"
+    end
+
+    if value == resourceRoot then
+        return "resourceRoot"
+    end
+
+    if type(isElement) == "function" and isElement(value) then
+        local elementType = getElementType(value)
+
+        if elementType == "resource" or elementType == "root" then
+            return "root"
+        end
+
+        if elementType == "vehicle"
+            and type(getPedOccupiedVehicle) == "function"
+            and value == getPedOccupiedVehicle(localPlayer)
+        then
+            return "localPlayer.vehicle"
+        end
+
+        if elementType == "player"
+            and type(getPlayerName) == "function"
+        then
+            return "getPlayerFromName("
+                .. quoteString(getPlayerName(value))
+                .. ")"
+        end
+
+        return "elem:" .. tostring(elementType or "unknown")
+    end
+
+    local valueType = type(value)
+
+    if valueType == "string" then
+        return quoteString(value)
+
+    elseif valueType == "number" or valueType == "boolean" then
+        return tostring(value)
+
+    elseif valueType == "table" then
+        if depth >= 3 or visited[value] then
+            return "{ ... }"
+        end
+
+        visited[value] = true
+
+        local parts = {}
+
+        for index, item in ipairs(value) do
+            parts[#parts + 1] =
+                serializeArgument(item, depth + 1, visited)
+        end
+
+        for key, item in pairs(value) do
+            if type(key) ~= "number"
+                or key < 1
+                or key > #value
+                or key % 1 ~= 0
+            then
+                parts[#parts + 1] =
+                    "["
+                    .. serializeArgument(key, depth + 1, visited)
+                    .. "] = "
+                    .. serializeArgument(item, depth + 1, visited)
+            end
+        end
+
+        visited[value] = nil
+
+        return "{ " .. table.concat(parts, ", ") .. " }"
+    end
+
+    return tostring(value)
+end
+
+local function buildEventCall(functionName, args)
+    local serialized = {}
+
+    for index = 1, #args do
+        serialized[index] = serializeArgument(args[index])
+    end
+
+    return tostring(functionName)
+        .. " ( "
+        .. table.concat(serialized, ", ")
+        .. " )"
+end
+
+local function getEventLogText()
+    return table.concat(eventLines, "\n")
+end
+
+local function updateNativeGui()
+    if not isElement(eventMemo) then
+        return
+    end
+
+    guiSetText(eventMemo, getEventLogText())
+
+    if isElement(infoLabel) then
+        guiSetText(
+            infoLabel,
+            "Events: " .. tostring(#eventLines)
+                .. " | F1: toggle | Esc: close"
+        )
+    end
+
+    if #eventLines > 0 then
+        guiMemoSetCaretIndex(
+            eventMemo,
+            #getEventLogText()
+        )
+    end
+end
+
+local function appendEventLine(text)
+    eventLines[#eventLines + 1] = tostring(text or "")
+
+    if #eventLines > LOG_MAX_LINES then
+        table.remove(eventLines, 1)
+    end
+
+    updateNativeGui()
+end
+
+local function clearEventLog()
+    eventLines = {}
+    updateNativeGui()
+end
+
+local function copyAllEvents()
+    if type(setClipboard) == "function"
+        and #eventLines > 0
+    then
+        local ok = pcall(setClipboard, getEventLogText())
+
+        if ok then
+            logDebug("All events copied to clipboard.")
+        end
+    end
+end
+
+local function copyLastEvent()
+    if type(setClipboard) == "function"
+        and #eventLines > 0
+    then
+        local ok = pcall(
+            setClipboard,
+            eventLines[#eventLines]
+        )
+
+        if ok then
+            logDebug("Last event copied to clipboard.")
+        end
+    end
+end
+
+-- Called by the preFunction debug hook.
+local function eventDumper(
+    sourceResource,
+    functionName,
+    isAllowedByACL,
+    luaFilename,
+    luaLineNumber,
+    ...
+)
+    local args = { ... }
+
+    if #args == 0 then
+        return
+    end
+
+    local eventName = tostring(args[1])
+
+    local resourceName = "unknown"
+
+    if sourceResource and isElement(sourceResource) then
+        local ok, name = pcall(
+            getResourceName,
+            sourceResource
+        )
+
+        if ok and name then
+            resourceName = name
+        end
+    end
+
+    if resourceName == "nrp_player_head"
+        or ignoredEvents[eventName]
+    then
+        return
+    end
+
+    appendEventLine(
+        buildEventCall(functionName, args)
+    )
+end
+
+local function isDumperVisible()
+    return isElement(dumperWindow)
+        and guiGetVisible(dumperWindow)
+end
+
+local function setDumperVisible(state)
+    if not isElement(dumperWindow) then
+        return
+    end
+
+    state = state and true or false
+
+    guiSetVisible(dumperWindow, state)
+    showCursor(state)
+
+    if state then
+        guiBringToFront(dumperWindow)
+        updateNativeGui()
+    end
+end
+
+local function toggleDumper()
+    setDumperVisible(not isDumperVisible())
+end
+
+local function createNativeGui()
+    if isElement(dumperWindow) then
+        return true
+    end
+
+    local screenWidth, screenHeight = guiGetScreenSize()
+
+    local windowWidth = math.min(1100, screenWidth - 40)
+    local windowHeight = math.min(700, screenHeight - 40)
+
+    local windowX = math.floor(
+        (screenWidth - windowWidth) / 2
+    )
+
+    local windowY = math.floor(
+        (screenHeight - windowHeight) / 2
+    )
+
+    dumperWindow = guiCreateWindow(
+        windowX,
+        windowY,
+        windowWidth,
+        windowHeight,
+        "Events Dumper",
+        false
+    )
+
+    if not isElement(dumperWindow) then
+        logDebug("Failed to create GUI window.", 1)
+        return false
+    end
+
+    guiWindowSetSizable(dumperWindow, false)
+    guiWindowSetMovable(dumperWindow, true)
+
+    eventMemo = guiCreateMemo(
+        10,
+        28,
+        windowWidth - 20,
+        windowHeight - 92,
+        "",
+        false,
+        dumperWindow
+    )
+
+    if isElement(eventMemo) then
+        guiMemoSetReadOnly(eventMemo, true)
+        guiSetFont(eventMemo, "default-small")
+    else
+        logDebug("Failed to create event memo.", 1)
+    end
+
+    infoLabel = guiCreateLabel(
+        12,
+        windowHeight - 58,
+        windowWidth - 440,
+        22,
+        "Events: 0 | F1: toggle | Esc: close",
+        false,
+        dumperWindow
+    )
+
+    if isElement(infoLabel) then
+        guiLabelSetVerticalAlign(infoLabel, "center")
+    end
+
+    clearButton = guiCreateButton(
+        windowWidth - 410,
+        windowHeight - 62,
+        90,
+        30,
+        "Clear",
+        false,
+        dumperWindow
+    )
+
+    copyLastButton = guiCreateButton(
+        windowWidth - 310,
+        windowHeight - 62,
+        90,
+        30,
+        "Copy Last",
+        false,
+        dumperWindow
+    )
+
+    copyButton = guiCreateButton(
+        windowWidth - 210,
+        windowHeight - 62,
+        90,
+        30,
+        "Copy All",
+        false,
+        dumperWindow
+    )
+
+    closeButton = guiCreateButton(
+        windowWidth - 110,
+        windowHeight - 62,
+        90,
+        30,
+        "Close",
+        false,
+        dumperWindow
+    )
+
+    if isElement(clearButton) then
+        addEventHandler(
+            "onClientGUIClick",
+            clearButton,
+            clearEventLog,
+            false
+        )
+    end
+
+    if isElement(copyLastButton) then
+        addEventHandler(
+            "onClientGUIClick",
+            copyLastButton,
+            copyLastEvent,
+            false
+        )
+    end
+
+    if isElement(copyButton) then
+        addEventHandler(
+            "onClientGUIClick",
+            copyButton,
+            copyAllEvents,
+            false
+        )
+    end
+
+    if isElement(closeButton) then
+        addEventHandler(
+            "onClientGUIClick",
+            closeButton,
+            function()
+                setDumperVisible(false)
+            end,
+            false
+        )
+    end
+
+    setDumperVisible(false)
+
+    logDebug("GUI created successfully.")
+
+    return true
+end
+
+local function installDebugHook()
+    if hookInstalled then
+        return true
+    end
+
+    if type(addDebugHook) ~= "function" then
+        logDebug("addDebugHook is unavailable.", 1)
+        return false
+    end
+
+    local callOK, result = pcall(
+        addDebugHook,
+        "preFunction",
+        eventDumper,
+        {
+            "triggerServerEvent",
+            "triggerLatentServerEvent"
+        }
+    )
+
+    if not callOK then
+        logDebug(
+            "Hook installation raised an error: "
+                .. tostring(result),
+            1
+        )
+
+        return false
+    end
+
+    -- MTA debug-hook functions can return nil on success.
+    -- A protected call only proves that no Lua error occurred.
+    hookInstalled = true
+
+    logDebug(
+        "Hook installation call completed. "
+            .. "Check whether events are being captured."
+    )
+
+    return true
+end
+
+local function removeDebugHook()
+    if not hookInstalled then
+        return
+    end
+
+    if type(removeDebugHook) == "function" then
+        pcall(
+            removeDebugHook,
+            "preFunction",
+            eventDumper,
+            {
+                "triggerServerEvent",
+                "triggerLatentServerEvent"
+            }
+        )
+    end
+
+    hookInstalled = false
+end
+
+addEventHandler("onClientKey", root, function(button, press)
+    if not press then
+        return
+    end
+
+    if button == "F4" or button == "f4" then
+        cancelEvent()
+        toggleDumper()
+
+    elseif isDumperVisible()
+        and (button == "escape" or button == "ESC")
+    then
+        cancelEvent()
+        setDumperVisible(false)
+    end
+end)
+
+addEventHandler(
+    "onClientResourceStart",
+    resourceRoot,
+    function()
+        if resourceStarted then
+            return
+        end
+
+        resourceStarted = true
+
+        createNativeGui()
+        installDebugHook()
+
+        logDebug("Resource started.")
+    end
+)
+
+-- Supports loading the file after the resource-start event.
+if not resourceStarted then
+    createNativeGui()
+    installDebugHook()
+    resourceStarted = true
+end
+
+addEventHandler(
+    "onClientResourceStop",
+    resourceRoot,
+    function(stoppedResource)
+        if stoppedResource ~= getThisResource() then
+            return
+        end
+
+        removeDebugHook()
+
+        if isElement(dumperWindow) then
+            destroyElement(dumperWindow)
+        end
+
+        showCursor(false)
+
+        logDebug("Resource stopped.")
+    end
+)
+
+
+
+
+
+
+local screenW, screenH = guiGetScreenSize()
+
+local windowW = 650
+local windowH = 480
+
+local windowX = (screenW - windowW) / 2
+local windowY = (screenH - windowH) / 2
+
+local DEFAULT_TEXT =
+    "-- Вставь сюда Lua-код и нажми «Выполнить»"
+
+
+local injectorWindow = guiCreateWindow(
+    windowX,
+    windowY,
+    windowW,
+    windowH,
+    "MR.Lorem | Local Lua Console",
+    false
+)
+
+guiWindowSetSizable(injectorWindow, false)
+guiSetVisible(injectorWindow, false)
+
+
+local luaMemo = guiCreateMemo(
+    10,
+    30,
+    windowW - 20,
+    windowH - 150,
+    DEFAULT_TEXT,
+    false,
+    injectorWindow
+)
+
+
+local btnExecute = guiCreateButton(
+    10,
+    windowH - 105,
+    195,
+    40,
+    "Выполнить",
+    false,
+    injectorWindow
+)
+
+local btnClear = guiCreateButton(
+    220,
+    windowH - 105,
+    195,
+    40,
+    "Очистить",
+    false,
+    injectorWindow
+)
+
+local btnClose = guiCreateButton(
+    430,
+    windowH - 105,
+    210,
+    40,
+    "Закрыть",
+    false,
+    injectorWindow
+)
+
+
+local lblStatus = guiCreateLabel(
+    10,
+    windowH - 58,
+    windowW - 20,
+    20,
+    "Статус: Ожидание ввода...",
+    false,
+    injectorWindow
+)
+
+guiLabelSetHorizontalAlign(
+    lblStatus,
+    "left",
+    true
+)
+
+guiSetFont(
+    lblStatus,
+    "default-bold"
+)
+
+
+local lblHelp = guiCreateLabel(
+    10,
+    windowH - 32,
+    windowW - 20,
+    20,
+    "F2 — открыть/закрыть | Ctrl+Enter — выполнить",
+    false,
+    injectorWindow
+)
+
+guiLabelSetHorizontalAlign(
+    lblHelp,
+    "left",
+    true
+)
+
+
+local function setStatus(text, r, g, b)
+    guiSetText(
+        lblStatus,
+        "Статус: " .. text
+    )
+
+    guiLabelSetColor(
+        lblStatus,
+        r,
+        g,
+        b
+    )
+end
+
+
+local function toggleConsole()
+    local visible = not guiGetVisible(injectorWindow)
+
+    guiSetVisible(
+        injectorWindow,
+        visible
+    )
+
+    showCursor(visible)
+
+    if visible then
+        guiBringToFront(injectorWindow)
+        guiSetInputMode("no_binds_when_editing")
+    else
+        guiSetInputMode("allow_binds")
+    end
+end
+
+bindKey(
+    "f2",
+    "down",
+    toggleConsole
+)
+
+
+local function executeCode()
+    local codeText = guiGetText(luaMemo)
+    local cleanText = codeText:gsub("%s", "")
+
+    if cleanText == "" or codeText == DEFAULT_TEXT then
+        setStatus(
+            "Ошибка: поле ввода пустое.",
+            255,
+            80,
+            80
+        )
+
+        return
+    end
+
+    local compiledFunction
+    local compileError
+
+    if loadstring then
+        compiledFunction, compileError =
+            loadstring(
+                codeText,
+                "@LocalLuaConsole"
+            )
+    elseif load then
+        compiledFunction, compileError =
+            load(
+                codeText,
+                "@LocalLuaConsole"
+            )
+    else
+        setStatus(
+            "loadstring недоступен.",
+            255,
+            80,
+            80
+        )
+
+        return
+    end
+
+    if not compiledFunction then
+        setStatus(
+            "Ошибка синтаксиса: "
+                .. tostring(compileError),
+            255,
+            80,
+            80
+        )
+
+        outputChatBox(
+            "[Console] Ошибка синтаксиса: "
+                .. tostring(compileError),
+            255,
+            0,
+            0
+        )
+
+        return
+    end
+
+    local startTime = getTickCount()
+
+    local success, runtimeError =
+        pcall(compiledFunction)
+
+    local executionTime =
+        getTickCount() - startTime
+
+    if success then
+        setStatus(
+            "Успешно выполнено за "
+                .. executionTime
+                .. " мс.",
+            80,
+            255,
+            80
+        )
+
+        outputChatBox(
+            "[Console] Код выполнен успешно.",
+            0,
+            255,
+            0
+        )
+    else
+        setStatus(
+            "Ошибка выполнения: "
+                .. tostring(runtimeError),
+            255,
+            80,
+            80
+        )
+
+        outputChatBox(
+            "[Console] Ошибка выполнения: "
+                .. tostring(runtimeError),
+            255,
+            0,
+            0
+        )
+    end
+end
+
+
+local function clearCode()
+    guiSetText(
+        luaMemo,
+        ""
+    )
+
+    setStatus(
+        "Поле очищено.",
+        200,
+        200,
+        200
+    )
+end
+
+
+local function closeConsole()
+    guiSetVisible(
+        injectorWindow,
+        false
+    )
+
+    showCursor(false)
+    guiSetInputMode("allow_binds")
+end
+
+
+addEventHandler(
+    "onClientGUIClick",
+    btnExecute,
+    function()
+        executeCode()
+    end,
+    false
+)
+
+
+addEventHandler(
+    "onClientGUIClick",
+    btnClear,
+    function()
+        clearCode()
+    end,
+    false
+)
+
+
+addEventHandler(
+    "onClientGUIClick",
+    btnClose,
+    function()
+        closeConsole()
+    end,
+    false
+)
+
+
+addEventHandler(
+    "onClientKey",
+    root,
+    function(button, pressed)
+        if not pressed then
+            return
+        end
+
+        if not guiGetVisible(injectorWindow) then
+            return
+        end
+
+        local ctrlPressed =
+            getKeyState("lctrl")
+            or getKeyState("rctrl")
+
+        if button == "enter" and ctrlPressed then
+            executeCode()
+            cancelEvent()
+        end
+    end
+)
+
+
+addEventHandler(
+    "onClientResourceStop",
+    resourceRoot,
+    function()
+        guiSetVisible(
+            injectorWindow,
+            false
+        )
+
+        showCursor(false)
+        guiSetInputMode("allow_binds")
+    end
+)
+
+
+outputChatBox(
+    "[Console] #00FF00Загружено!",
+    255,
+    255,
+    255,
+    true
+)
+
+outputChatBox(
+    "[Console] Нажмите #FFFF00F2#FFFFFF для открытия.",
+    255,
+    255,
+    255,
+    true
+)
