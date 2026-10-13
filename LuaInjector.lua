@@ -6,6 +6,31 @@ _G.GH_Cache.events = _G.GH_Cache.events or {}
 _G.GH_Cache.binds = _G.GH_Cache.binds or {}
 _G.GH_Cache.gui = _G.GH_Cache.gui or {}
 _G.GH_Cache.timers = _G.GH_Cache.timers or {}
+_G.GH_Cache.settings = _G.GH_Cache.settings or {}
+
+-- Единое хранилище настроек. Оно переживает повторный запуск этого кода.
+-- Важно: отдельные разделы не перезаписывают друг друга.
+local settingsCache = _G.GH_Cache.settings
+settingsCache.binds = settingsCache.binds or {}
+
+local function saveSettings()
+    _G.GH_Cache.settings = settingsCache
+end
+
+local function getSavedBind(bindId, defaultKey)
+    local savedKey = settingsCache.binds[bindId]
+
+    -- false означает, что пользователь специально удалил бинд.
+    if savedKey == false then
+        return nil
+    end
+
+    if type(savedKey) == "string" and savedKey ~= "" then
+        return savedKey
+    end
+
+    return defaultKey
+end
 
 -- Если ранее была загружена старая версия панели, аккуратно убираем её UI.
 if type(fullCleanup) == "function" then
@@ -71,16 +96,25 @@ local function keyBindInterceptor(button, press)
     cancelEvent()
     
     local data = bindsData[waitingForBind]
+    if not data then
+        waitingForBind = nil
+        return
+    end
+
     if data.key then unbindKey(data.key, "down", data.fn) end
     
     if button == "escape" or button == "backspace" then
         data.key = nil
         guiSetText(waitingForBind, "?")
+        settingsCache.binds[data.bindId] = false
+        saveSettings()
         outputChatBox("Бинд удален", 255, 0, 0)
     else
         data.key = button
         guiSetText(waitingForBind, string.upper(button))
         bindKey(button, "down", data.fn)
+        settingsCache.binds[data.bindId] = button
+        saveSettings()
         outputChatBox("Забинджено на: " .. string.upper(button), 0, 255, 0)
     end
     waitingForBind = nil
@@ -157,9 +191,13 @@ local function addActionButton(
     name,
     fn,
     side,
-    defaultKey
+    defaultKey,
+    bindId
 )
     side = side or "left"
+    bindId = bindId or name
+
+    local savedKey = getSavedBind(bindId, defaultKey)
 
     local layoutSide = side
 
@@ -181,20 +219,21 @@ local function addActionButton(
         posY,
         40,
         35,
-        defaultKey and string.upper(defaultKey) or "?",
+        savedKey and string.upper(savedKey) or "?",
         false,
         parent
     )
 
     bindsData[bindButton] = {
         fn = fn,
-        key = defaultKey,
-        name = name
+        key = savedKey,
+        name = name,
+        bindId = bindId
     }
 
-    if defaultKey then
+    if savedKey then
         bindKey(
-            defaultKey,
+            savedKey,
             "down",
             fn
         )
@@ -250,7 +289,8 @@ local function addMenuButton(
     name,
     fn,
     side,
-    defaultKey
+    defaultKey,
+    bindId
 )
     addActionButton(
         scrollFun,
@@ -258,7 +298,8 @@ local function addMenuButton(
         name,
         fn,
         side,
-        defaultKey
+        defaultKey,
+        bindId
     )
 end
 bindKey("f9", "down", function()
@@ -300,12 +341,29 @@ local toolConfig = {
     tpPut = { x = 776.723, y = -1581.878, z = 47.749 }
 }
 
+local purchaseConfig = {
+    repairKit = 1,
+    medKit = 1,
+    lunch = 1,
+    treasureMap = 1,
+    chernobylMap = 1
+}
+
 -- Сохраняем настройки в общей таблице, чтобы они не сбрасывались при переинжекте.
-local savedSettings = _G.GH_Cache.settings or {}
+local savedSettings = settingsCache
 if type(savedSettings.fly) == "table" then
     for key, value in pairs(savedSettings.fly) do
         if flyConfig[key] ~= nil and type(value) == type(flyConfig[key]) then
             flyConfig[key] = value
+        end
+    end
+end
+
+if type(savedSettings.purchase) == "table" then
+    for key, defaultValue in pairs(purchaseConfig) do
+        local savedValue = tonumber(savedSettings.purchase[key])
+        if savedValue then
+            purchaseConfig[key] = math.floor(math.max(1, math.min(100, savedValue)))
         end
     end
 end
@@ -358,7 +416,7 @@ end
 local ESP_MAX_DISTANCE = 300 
 local COLOR_RED = tocolor(255, 0, 0, 255) 
 local COLOR_STOKE = tocolor(0, 0, 0, 220) 
-local espEnabled = true
+local espEnabled = false
 
 local function drawPlayerESP()
     local px, py, pz = getElementPosition(localPlayer)
@@ -564,24 +622,27 @@ end
 cacheEvent("treasuress", treasuress)
 
 function buyRepairKit()
-    triggerServerEvent("Gasstation:BuyItems", root, 1, "gasstation_14")
-    outputChatBox("[Engine] #00FF00Запрос на ремкомплект отправлен!", 255, 255, 255, true)
+    local amount = purchaseConfig.repairKit
+    triggerServerEvent("Gasstation:BuyItems", root, amount, "gasstation_14")
+    outputChatBox("[Engine] #00FF00Запрос на ремкомплект: x" .. amount, 255, 255, 255, true)
 end
 
 function buyMedKit()
-    triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket={[5]=1}, business_id="drugstore_5", type_pay=1, type_product=4})
-    outputChatBox("[Engine] #00FF00Запрос на аптечку отправлен!", 255, 255, 255, true)
+    local amount = purchaseConfig.medKit
+    triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket={[5]=amount}, business_id="drugstore_5", type_pay=1, type_product=4})
+    outputChatBox("[Engine] #00FF00Запрос на аптечку: x" .. amount, 255, 255, 255, true)
 end
 function buylunch()
+ local amount = purchaseConfig.lunch
  triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
     basket = {
-      [5] = 1
+      [5] = amount
     },
     business_id = "shop_10",
     type_pay = 1,
     type_product = 1
   } )
-    outputChatBox("[Engine] #00FF00Запрос на Ланч отправлен!", 255, 255, 255, true)
+    outputChatBox("[Engine] #00FF00Запрос на Ланч: x" .. amount, 255, 255, 255, true)
 end
 
 ----------------------------------------------------------------
@@ -975,6 +1036,39 @@ end
 
 local btnApplyFlySettings = guiCreateButton(400, 420, 320, 40, "Применить настройки", false, tabFlySettings)
 
+local purchaseTitle = guiCreateLabel(18, 505, 350, 18, "Количество покупок за одно нажатие", false, tabFlySettings)
+guiSetFont(purchaseTitle, "default-bold-small")
+guiLabelSetColor(purchaseTitle, 255, 188, 90)
+
+local purchaseHint = guiCreateLabel(18, 525, 700, 18, "Значения от 1 до 100. Они используются кнопками покупки и их биндами.", false, tabFlySettings)
+guiSetFont(purchaseHint, "default-small")
+guiLabelSetColor(purchaseHint, 140, 160, 185)
+
+guiCreateLabel(20, 555, 145, 25, "Ремкомплектов:", false, tabFlySettings)
+local editRepairAmount = guiCreateEdit(170, 552, 75, 28, tostring(purchaseConfig.repairKit), false, tabFlySettings)
+
+guiCreateLabel(270, 555, 105, 25, "Аптечек:", false, tabFlySettings)
+local editMedKitAmount = guiCreateEdit(380, 552, 75, 28, tostring(purchaseConfig.medKit), false, tabFlySettings)
+
+guiCreateLabel(480, 555, 75, 25, "Еды:", false, tabFlySettings)
+local editLunchAmount = guiCreateEdit(560, 552, 75, 28, tostring(purchaseConfig.lunch), false, tabFlySettings)
+
+guiCreateLabel(20, 590, 145, 25, "Карт клада:", false, tabFlySettings)
+local editTreasureMapAmount = guiCreateEdit(170, 587, 75, 28, tostring(purchaseConfig.treasureMap), false, tabFlySettings)
+
+guiCreateLabel(270, 590, 105, 25, "Карт Чернобыля:", false, tabFlySettings)
+local editChernobylMapAmount = guiCreateEdit(380, 587, 75, 28, tostring(purchaseConfig.chernobylMap), false, tabFlySettings)
+
+for _, edit in ipairs({
+    editRepairAmount,
+    editMedKitAmount,
+    editLunchAmount,
+    editTreasureMapAmount,
+    editChernobylMapAmount
+}) do
+    guiSetFont(edit, "default-small")
+end
+
 local function getNumberFromEdit(edit, oldValue, minValue, maxValue)
     local value = tonumber(guiGetText(edit))
     if not value then return oldValue end
@@ -1009,32 +1103,44 @@ addEventHandler("onClientGUIClick", btnApplyFlySettings, function()
     toolConfig.tpPut.y = getNumberFromEdit(editPutY, toolConfig.tpPut.y, -10000, 10000)
     toolConfig.tpPut.z = getNumberFromEdit(editPutZ, toolConfig.tpPut.z, -1000, 1000)
 
-    _G.GH_Cache.settings = {
-        fly = {
-            playerSpeed = flyConfig.playerSpeed,
-            playerBoost = flyConfig.playerBoost,
-            carSpeed = flyConfig.carSpeed,
-            carBoost = flyConfig.carBoost,
-            hidePlayer = flyConfig.hidePlayer,
-            hideVehicle = flyConfig.hideVehicle,
-            disableCarCollisions = flyConfig.disableCarCollisions,
-            restorePosition = flyConfig.restorePosition
+    purchaseConfig.repairKit = math.floor(getNumberFromEdit(editRepairAmount, purchaseConfig.repairKit, 1, 100))
+    purchaseConfig.medKit = math.floor(getNumberFromEdit(editMedKitAmount, purchaseConfig.medKit, 1, 100))
+    purchaseConfig.lunch = math.floor(getNumberFromEdit(editLunchAmount, purchaseConfig.lunch, 1, 100))
+    purchaseConfig.treasureMap = math.floor(getNumberFromEdit(editTreasureMapAmount, purchaseConfig.treasureMap, 1, 100))
+    purchaseConfig.chernobylMap = math.floor(getNumberFromEdit(editChernobylMapAmount, purchaseConfig.chernobylMap, 1, 100))
+
+    settingsCache.fly = {
+        playerSpeed = flyConfig.playerSpeed,
+        playerBoost = flyConfig.playerBoost,
+        carSpeed = flyConfig.carSpeed,
+        carBoost = flyConfig.carBoost,
+        hidePlayer = flyConfig.hidePlayer,
+        hideVehicle = flyConfig.hideVehicle,
+        disableCarCollisions = flyConfig.disableCarCollisions,
+        restorePosition = flyConfig.restorePosition
+    }
+    settingsCache.tools = {
+        speedBoostMultiplier = toolConfig.speedBoostMultiplier,
+        speedBoostMode = toolConfig.speedBoostMode,
+        tpTake = {
+            x = toolConfig.tpTake.x,
+            y = toolConfig.tpTake.y,
+            z = toolConfig.tpTake.z
         },
-        tools = {
-            speedBoostMultiplier = toolConfig.speedBoostMultiplier,
-            speedBoostMode = toolConfig.speedBoostMode,
-            tpTake = {
-                x = toolConfig.tpTake.x,
-                y = toolConfig.tpTake.y,
-                z = toolConfig.tpTake.z
-            },
-            tpPut = {
-                x = toolConfig.tpPut.x,
-                y = toolConfig.tpPut.y,
-                z = toolConfig.tpPut.z
-            }
+        tpPut = {
+            x = toolConfig.tpPut.x,
+            y = toolConfig.tpPut.y,
+            z = toolConfig.tpPut.z
         }
     }
+    settingsCache.purchase = {
+        repairKit = purchaseConfig.repairKit,
+        medKit = purchaseConfig.medKit,
+        lunch = purchaseConfig.lunch,
+        treasureMap = purchaseConfig.treasureMap,
+        chernobylMap = purchaseConfig.chernobylMap
+    }
+    saveSettings()
 
     guiSetText(editPlayerSpeed, tostring(flyConfig.playerSpeed))
     guiSetText(editPlayerBoost, tostring(flyConfig.playerBoost))
@@ -1048,9 +1154,153 @@ addEventHandler("onClientGUIClick", btnApplyFlySettings, function()
     guiSetText(editPutX, string.format("%.3f", toolConfig.tpPut.x))
     guiSetText(editPutY, string.format("%.3f", toolConfig.tpPut.y))
     guiSetText(editPutZ, string.format("%.3f", toolConfig.tpPut.z))
+    guiSetText(editRepairAmount, tostring(purchaseConfig.repairKit))
+    guiSetText(editMedKitAmount, tostring(purchaseConfig.medKit))
+    guiSetText(editLunchAmount, tostring(purchaseConfig.lunch))
+    guiSetText(editTreasureMapAmount, tostring(purchaseConfig.treasureMap))
+    guiSetText(editChernobylMapAmount, tostring(purchaseConfig.chernobylMap))
 
     outputChatBox("[Настройка] #00FF00Параметры применены!", 255, 255, 255, true)
 end, false)
+
+----------------------------------------------------------------
+-- ВКЛАДКА ТЕМА
+----------------------------------------------------------------
+local themeDefinitions = {
+    midnight = {
+        title = "Ночная",
+        window = { 24, 30, 45 },
+        text = { 225, 232, 245 },
+        muted = { 145, 160, 185 },
+        accent = { 85, 182, 255 },
+        button = { 185, 215, 255 }
+    },
+    emerald = {
+        title = "Изумрудная",
+        window = { 20, 42, 38 },
+        text = { 225, 246, 236 },
+        muted = { 145, 190, 172 },
+        accent = { 70, 225, 155 },
+        button = { 180, 255, 220 }
+    },
+    violet = {
+        title = "Фиолетовая",
+        window = { 38, 28, 55 },
+        text = { 241, 231, 255 },
+        muted = { 180, 160, 205 },
+        accent = { 190, 125, 255 },
+        button = { 225, 200, 255 }
+    },
+    sunset = {
+        title = "Закат",
+        window = { 58, 33, 28 },
+        text = { 255, 239, 222 },
+        muted = { 205, 165, 140 },
+        accent = { 255, 145, 75 },
+        button = { 255, 215, 170 }
+    }
+}
+
+local themeOrder = { "midnight", "emerald", "violet", "sunset" }
+local selectedTheme = themeDefinitions[settingsCache.theme] and settingsCache.theme or "midnight"
+local themeRadioButtons = {}
+local themePreview
+
+local function toGuiColour(rgb)
+    return string.format("FF%02X%02X%02X", rgb[1], rgb[2], rgb[3])
+end
+
+local function setGuiPropertySafe(element, property, value)
+    if isElement(element) then
+        pcall(guiSetProperty, element, property, value)
+    end
+end
+
+local function applyMainTheme(themeId)
+    local theme = themeDefinitions[themeId] or themeDefinitions.midnight
+    selectedTheme = themeId
+    settingsCache.theme = themeId
+    saveSettings()
+
+    setGuiPropertySafe(mainWin, "TitlebarColour", toGuiColour(theme.window))
+    setGuiPropertySafe(mainWin, "TitlebarTextColour", toGuiColour(theme.text))
+    setGuiPropertySafe(mainWin, "CaptionColour", toGuiColour(theme.window))
+    setGuiPropertySafe(mainWin, "BorderColour", toGuiColour(theme.accent))
+
+    local function applyToElement(element)
+        if not isElement(element) then
+            return
+        end
+
+        local elementType = getElementType(element)
+        if elementType == "gui-label" then
+            guiLabelSetColor(element, theme.text[1], theme.text[2], theme.text[3])
+        elseif elementType == "gui-button" then
+            setGuiPropertySafe(element, "NormalTextColour", toGuiColour(theme.button))
+            setGuiPropertySafe(element, "HoverTextColour", toGuiColour(theme.accent))
+            setGuiPropertySafe(element, "PushedTextColour", toGuiColour(theme.text))
+        elseif elementType == "gui-checkbox"
+            or elementType == "gui-radiobutton"
+        then
+            setGuiPropertySafe(element, "NormalTextColour", toGuiColour(theme.text))
+        elseif elementType == "gui-edit"
+            or elementType == "gui-memo"
+        then
+            setGuiPropertySafe(element, "TextColour", toGuiColour(theme.text))
+        end
+
+        if type(getElementChildren) == "function" then
+            local children = getElementChildren(element) or {}
+            for _, child in ipairs(children) do
+                applyToElement(child)
+            end
+        end
+    end
+
+    applyToElement(mainWin)
+
+    for _, label in ipairs({ flyHint, purchaseHint }) do
+        if isElement(label) then
+            guiLabelSetColor(label, theme.muted[1], theme.muted[2], theme.muted[3])
+        end
+    end
+
+    if isElement(themePreview) then
+        guiLabelSetColor(themePreview, theme.accent[1], theme.accent[2], theme.accent[3])
+        guiSetText(themePreview, "Текущая тема: " .. theme.title .. "\nЦвета применяются сразу и сохраняются в настройках.")
+    end
+end
+
+local tabTheme = guiCreateTab("Тема", tabPanel)
+local themeTitle = guiCreateLabel(20, 18, 500, 25, "Выбери оформление панели", false, tabTheme)
+guiSetFont(themeTitle, "default-bold-small")
+
+local themeHint = guiCreateLabel(20, 48, 700, 20, "Тема меняет цвета текста, кнопок и заголовка окна.", false, tabTheme)
+guiSetFont(themeHint, "default-small")
+
+local themeY = 95
+for _, themeId in ipairs(themeOrder) do
+    local theme = themeDefinitions[themeId]
+    local currentThemeId = themeId
+    local radio = guiCreateRadioButton(25, themeY, 300, 25, theme.title, false, tabTheme)
+    themeRadioButtons[themeId] = radio
+    guiRadioButtonSetSelected(radio, selectedTheme == themeId)
+    setGuiPropertySafe(radio, "NormalTextColour", toGuiColour(theme.accent))
+
+    local swatch = guiCreateLabel(340, themeY, 220, 25, "Акцент: RGB " .. table.concat(theme.accent, ", "), false, tabTheme)
+    guiLabelSetColor(swatch, theme.accent[1], theme.accent[2], theme.accent[3])
+    themeY = themeY + 42
+
+    addEventHandler("onClientGUIClick", radio, function()
+        if guiRadioButtonGetSelected(source) then
+            applyMainTheme(currentThemeId)
+        end
+    end, false)
+end
+
+themePreview = guiCreateLabel(25, 290, 680, 55, "", false, tabTheme)
+guiSetFont(themePreview, "default-bold-small")
+guiLabelSetVerticalAlign(themePreview, "center")
 
 function teleportToTextID(id, name)
     local targetPlayer = getPlayerByTextID(id)
@@ -1147,12 +1397,16 @@ end
 cacheEvent("snowblower", snowblower)
 
 function buymap()
-   triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket = { 1 }, business_id = "digging_shop_1", type_pay = 1, type_product = 5})
+   local amount = purchaseConfig.treasureMap
+   triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket = { [1] = amount }, business_id = "digging_shop_1", type_pay = 1, type_product = 5})
+   outputChatBox("[Engine] #00FF00Запрос на карту клада: x" .. amount, 255, 255, 255, true)
 end
 cacheEvent("buymap", buymap)
 
 function buymapx()
-   triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket = { [3] = 1 }, business_id = "digging_shop_1", type_pay = 1, type_product = 5})
+   local amount = purchaseConfig.chernobylMap
+   triggerServerEvent("Shop:PlayerWantBuyItem", root, {basket = { [3] = amount }, business_id = "digging_shop_1", type_pay = 1, type_product = 5})
+   outputChatBox("[Engine] #00FF00Запрос на карту Чернобыля: x" .. amount, 255, 255, 255, true)
 end
 cacheEvent("buymapx", buymapx)
 
@@ -1193,7 +1447,7 @@ local menuButtons = {
 }
 
 for _, item in ipairs(menuButtons) do
-    addMenuButton(item.name, item.fn, item.side, item.key)
+    addMenuButton(item.name, item.fn, item.side, item.key, item.id)
 end
 
 -- ВКЛАДКА: РАБОТЫ
@@ -1299,8 +1553,8 @@ end
 addEventHandler("onClientKey", root, handleGuiScroll)
 cacheEvent("guiScroll", handleGuiScroll)
 
-local function addJobButton(name, fn, side, defaultKey)
-    addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey)
+local function addJobButton(name, fn, side, defaultKey, bindId)
+    addActionButton(scrollJobs, colYJobs, name, fn, side, defaultKey, bindId)
 end
 
 -- Справочник профессий из job_configs.lua.
@@ -1752,7 +2006,7 @@ local jobButtons = {
 }
 
 for _, item in ipairs(jobButtons) do
-    addJobButton(item.name, item.fn, item.side, item.key)
+    addJobButton(item.name, item.fn, item.side, item.key, item.id)
 end
 
 local jobDirectoryY = math.max(
@@ -1891,6 +2145,9 @@ _G.GH_Cache.binds["speedBoostBind"] = {
     fn = speedBoostKeyDown,
     upFn = speedBoostKeyUp
 }
+
+-- Применяем сохранённую тему после создания всех элементов основной панели.
+applyMainTheme(selectedTheme)
 
 outputChatBox("[Engine] #00FF00Скрипт полностью загружен!", 255, 255, 255, true)
 
