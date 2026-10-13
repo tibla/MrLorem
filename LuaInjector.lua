@@ -13,13 +13,15 @@ _G.GH_Cache.settings = _G.GH_Cache.settings or {}
 local settingsCache = _G.GH_Cache.settings
 settingsCache.binds = settingsCache.binds or {}
 
--- Дополнительный модуль из присланного кода.
+-- Дополнительные функции из присланного кода.
 local aimbotEnabled = false
 local aimbotFov = 300
 local aimbotCorrection = 2.2
 local aimbotUseCamera = true
 local aimbotRender
 local aimbotStatusLabel
+local avs2Timer
+local avs2Active = false
 
 local function saveSettings()
     _G.GH_Cache.settings = settingsCache
@@ -72,7 +74,10 @@ function fullCleanup()
     -- 3. Очищаем активные таймеры
     if isTimer(autoTimer) then killTimer(autoTimer) end
     if isTimer(speedBoostTimer) then killTimer(speedBoostTimer) end
+    if isTimer(avs2Timer) then killTimer(avs2Timer) end
     speedBoostTimer = nil
+    avs2Timer = nil
+    avs2Active = false
     speedBoostActive = false
     for _, timer in pairs(_G.GH_Cache.timers) do
         if isTimer(timer) then killTimer(timer) end
@@ -164,11 +169,6 @@ local tabPanel = guiCreateTabPanel(
     false,
     mainWin
 )
-
--- Эти две вкладки создаются сразу после панели, поэтому не зависят
--- от загрузки остальных функций ниже.
-local tabFun2 = guiCreateTab("Приколы 2", tabPanel)
-local tabSettings2 = guiCreateTab("Настройка 2", tabPanel)
 
 -- Вкладка «Приколы»
 local tabFun = guiCreateTab(
@@ -315,147 +315,6 @@ local function addMenuButton(
         bindId
     )
 end
-----------------------------------------------------------------
--- ДОПОЛНИТЕЛЬНАЯ КАТЕГОРИЯ «ПРИКОЛЫ 2»
-----------------------------------------------------------------
-local function findAimbotRotation(x1, y1, x2, y2)
-    local rotation = -math.deg(math.atan2(x2 - x1, y2 - y1))
-    if rotation < 0 then
-        rotation = rotation + 360
-    end
-    return rotation
-end
-
-local function getAimbotTarget()
-    local screenW, screenH = guiGetScreenSize()
-    local crosshairX, crosshairY = screenW * 0.535, screenH * 0.400
-    local closestPlayer
-    local closestPosition
-    local closestDistance = aimbotFov
-    local interior = getElementInterior(localPlayer)
-    local dimension = getElementDimension(localPlayer)
-
-    for _, player in ipairs(getElementsByType("player")) do
-        if player ~= localPlayer
-            and not isPedDead(player)
-            and getElementInterior(player) == interior
-            and getElementDimension(player) == dimension then
-            local ok, x, y, z = pcall(getPedBonePosition, player, 0)
-            if not ok or not x then
-                x, y, z = getElementPosition(player)
-                z = z + 0.2
-            end
-
-            local screenX, screenY = getScreenFromWorldPosition(x, y, z)
-            if screenX and screenY then
-                local distance = math.sqrt((screenX - crosshairX) ^ 2 + (screenY - crosshairY) ^ 2)
-                if distance < closestDistance then
-                    closestDistance = distance
-                    closestPlayer = player
-                    closestPosition = { x = x, y = y, z = z }
-                end
-            end
-        end
-    end
-
-    return closestPlayer, closestPosition
-end
-
-aimbotRender = function()
-    if not aimbotEnabled or not getControlState("aim_weapon") or isCursorShowing() then
-        return
-    end
-
-    local target, position = getAimbotTarget()
-    if not target or not position then
-        return
-    end
-
-    local playerX, playerY = getElementPosition(localPlayer)
-    local rotation = findAimbotRotation(playerX, playerY, position.x, position.y)
-    rotation = rotation + aimbotCorrection
-    setPedRotation(localPlayer, rotation)
-    setElementRotation(localPlayer, 0, 0, rotation, "Z", true)
-
-    if aimbotUseCamera and setPedCameraRotation then
-        setPedCameraRotation(localPlayer, rotation)
-    end
-end
-addEventHandler("onClientRender", root, aimbotRender)
-
-local function updateAimbotStatus()
-    if isElement(aimbotStatusLabel) then
-        guiSetText(aimbotStatusLabel, aimbotEnabled and "Состояние: ВКЛЮЧЕН" or "Состояние: ВЫКЛЮЧЕН")
-    end
-end
-
-local function toggleAimbot()
-    aimbotEnabled = not aimbotEnabled
-    updateAimbotStatus()
-    outputChatBox(aimbotEnabled and "[Aimbot] #00FF00Включен" or "[Aimbot] #FF0000Выключен", 255, 255, 255, true)
-end
-
-local function teleportToBlip41()
-    local targetBlip
-    for _, blip in ipairs(getElementsByType("blip")) do
-        if getBlipIcon(blip) == 41 then
-            targetBlip = blip
-            break
-        end
-    end
-
-    if not targetBlip then
-        outputChatBox("[Авс2] #FF0000Blip с иконкой 41 не найден.", 255, 255, 255, true)
-        return
-    end
-
-    local x, y, z = getElementPosition(targetBlip)
-    triggerServerEvent("RequestTeleport", localPlayer, x, y, z, 0, 0)
-    outputChatBox("[Авс2] #00FF00Запрос на телепорт отправлен.", 255, 255, 255, true)
-end
-
-local aimbotButton = guiCreateButton(15, 15, 220, 35, "Aimbot: Вкл/Выкл", false, tabFun2)
-addEventHandler("onClientGUIClick", aimbotButton, function(button)
-    if button == "left" then toggleAimbot() end
-end, false)
-
-aimbotStatusLabel = guiCreateLabel(15, 58, 300, 22, "", false, tabFun2)
-updateAimbotStatus()
-
-local avs2Button = guiCreateButton(15, 95, 220, 35, "Авс2", false, tabFun2)
-addEventHandler("onClientGUIClick", avs2Button, function(button)
-    if button == "left" then teleportToBlip41() end
-end, false)
-
-----------------------------------------------------------------
--- НАСТРОЙКА 2
-----------------------------------------------------------------
-local settings2Title = guiCreateLabel(18, 15, 450, 22, "Настройка Aimbot", false, tabSettings2)
-guiSetFont(settings2Title, "default-bold-small")
-guiCreateLabel(18, 52, 160, 25, "FOV:", false, tabSettings2)
-local aimbotFovEdit = guiCreateEdit(190, 49, 120, 28, tostring(aimbotFov), false, tabSettings2)
-guiCreateLabel(18, 92, 160, 25, "Поправка угла:", false, tabSettings2)
-local aimbotCorrectionEdit = guiCreateEdit(190, 89, 120, 28, tostring(aimbotCorrection), false, tabSettings2)
-local aimbotCameraCheck = guiCreateCheckBox(18, 130, 260, 25, "Поворачивать камеру", aimbotUseCamera, false, tabSettings2)
-local aimbotApplyButton = guiCreateButton(18, 170, 292, 35, "Сохранить настройки", false, tabSettings2)
-addEventHandler("onClientGUIClick", aimbotApplyButton, function(button)
-    if button ~= "left" then return end
-
-    local fov = tonumber(guiGetText(aimbotFovEdit))
-    local correction = tonumber(guiGetText(aimbotCorrectionEdit))
-    if not fov or not correction then
-        outputChatBox("[Настройка 2] #FF0000Введите числа в поля FOV и поправки.", 255, 255, 255, true)
-        return
-    end
-
-    aimbotFov = math.max(10, math.min(2000, fov))
-    aimbotCorrection = math.max(-180, math.min(180, correction))
-    aimbotUseCamera = guiCheckBoxGetSelected(aimbotCameraCheck)
-    guiSetText(aimbotFovEdit, tostring(aimbotFov))
-    guiSetText(aimbotCorrectionEdit, tostring(aimbotCorrection))
-    outputChatBox("[Настройка 2] #00FF00Настройки сохранены.", 255, 255, 255, true)
-end, false)
-
 bindKey("f9", "down", function()
     local visible = not guiGetVisible(mainWin)
 
@@ -1318,6 +1177,169 @@ addEventHandler("onClientGUIClick", btnApplyFlySettings, function()
 end, false)
 
 ----------------------------------------------------------------
+-- ДОПОЛНИТЕЛЬНЫЕ ВКЛАДКИ: «ПРИКОЛЫ 2» И «НАСТРОЙКА 2»
+----------------------------------------------------------------
+local tabFun2 = guiCreateTab("Приколы 2", tabPanel)
+local tabSettings2 = guiCreateTab("Настройка 2", tabPanel)
+local tabJobs = guiCreateTab("Работы", tabPanel)
+
+local function findAimbotRotation(x1, y1, x2, y2)
+    local rotation = -math.deg(math.atan2(x2 - x1, y2 - y1))
+    if rotation < 0 then rotation = rotation + 360 end
+    return rotation
+end
+
+local function getAimbotTarget()
+    local screenW, screenH = guiGetScreenSize()
+    local crosshairX, crosshairY = screenW * 0.535, screenH * 0.400
+    local closestPlayer
+    local closestPosition
+    local closestDistance = aimbotFov
+    local interior = getElementInterior(localPlayer)
+    local dimension = getElementDimension(localPlayer)
+
+    for _, player in ipairs(getElementsByType("player")) do
+        if player ~= localPlayer
+            and not isPedDead(player)
+            and getElementInterior(player) == interior
+            and getElementDimension(player) == dimension then
+            local ok, x, y, z = pcall(getPedBonePosition, player, 0)
+            if not ok or not x then
+                x, y, z = getElementPosition(player)
+                z = z + 0.2
+            end
+
+            local screenX, screenY = getScreenFromWorldPosition(x, y, z)
+            if screenX and screenY then
+                local distance = math.sqrt((screenX - crosshairX) ^ 2 + (screenY - crosshairY) ^ 2)
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = player
+                    closestPosition = { x = x, y = y, z = z }
+                end
+            end
+        end
+    end
+
+    return closestPlayer, closestPosition
+end
+
+aimbotRender = function()
+    if not aimbotEnabled or not getControlState("aim_weapon") or isCursorShowing() then
+        return
+    end
+
+    local target, position = getAimbotTarget()
+    if not target or not position then return end
+
+    local playerX, playerY = getElementPosition(localPlayer)
+    local rotation = findAimbotRotation(playerX, playerY, position.x, position.y) + aimbotCorrection
+    setPedRotation(localPlayer, rotation)
+    setElementRotation(localPlayer, 0, 0, rotation, "Z", true)
+
+    if aimbotUseCamera and setPedCameraRotation then
+        setPedCameraRotation(localPlayer, rotation)
+    end
+end
+addEventHandler("onClientRender", root, aimbotRender)
+
+local function updateAimbotStatus()
+    if isElement(aimbotStatusLabel) then
+        guiSetText(aimbotStatusLabel, aimbotEnabled and "Состояние: ВКЛЮЧЕН" or "Состояние: ВЫКЛЮЧЕН")
+    end
+end
+
+local function toggleAimbot()
+    aimbotEnabled = not aimbotEnabled
+    updateAimbotStatus()
+    outputChatBox(aimbotEnabled and "[Aimbot] #00FF00Включен" or "[Aimbot] #FF0000Выключен", 255, 255, 255, true)
+end
+
+local function getBlip41Position()
+    for _, blip in ipairs(getElementsByType("blip")) do
+        if isElement(blip) and getBlipIcon(blip) == 41 then
+            local x, y, z = getElementPosition(blip)
+            return x, y, z
+        end
+    end
+    return false
+end
+
+local function teleportToBlip41(silent)
+    local x, y, z = getBlip41Position()
+    if not x then return false end
+
+    triggerServerEvent("RequestTeleport", localPlayer, x, y, z, 0, 0)
+    if not silent then
+        outputChatBox("[Авс2] #00FF00Запрос на телепорт к blip 41 отправлен.", 255, 255, 255, true)
+    end
+    return true
+end
+
+local function toggleAvs2()
+    if avs2Active then
+        avs2Active = false
+        if isTimer(avs2Timer) then killTimer(avs2Timer) end
+        avs2Timer = nil
+        outputChatBox("[Авс2] #FF0000Выключен.", 255, 255, 255, true)
+        return
+    end
+
+    if not teleportToBlip41(true) then
+        outputChatBox("[Авс2] #FF0000Blip с иконкой 41 не найден.", 255, 255, 255, true)
+        return
+    end
+
+    avs2Active = true
+    avs2Timer = setTimer(function()
+        if not avs2Active or not teleportToBlip41(true) then
+            avs2Active = false
+            if isTimer(avs2Timer) then killTimer(avs2Timer) end
+            avs2Timer = nil
+        end
+    end, 20, 0)
+    outputChatBox("[Авс2] #00FF00Включен: телепорт каждые 20 мс.", 255, 255, 255, true)
+end
+
+-- Та же трёхколоночная раскладка, что и во вкладке «Приколы».
+local scrollFun2 = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabFun2)
+guiScrollPaneSetScrollBars(scrollFun2, false, true)
+local colYFun2 = { left = 10, center = 10, right = 10 }
+
+aimbotStatusLabel = guiCreateLabel(10, 10, 220, 24, "", false, scrollFun2)
+guiSetFont(aimbotStatusLabel, "default-bold-small")
+colYFun2.left = 45
+addActionButton(scrollFun2, colYFun2, "Авс2: Вкл/Выкл", toggleAvs2, "left", nil, "avs2_toggle")
+addActionButton(scrollFun2, colYFun2, "Aimbot: Вкл/Выкл", toggleAimbot, "center", nil, "aimbot_toggle")
+updateAimbotStatus()
+
+local settings2Title = guiCreateLabel(18, 15, 450, 22, "Настройка Aimbot и Авс2", false, tabSettings2)
+guiSetFont(settings2Title, "default-bold-small")
+guiCreateLabel(18, 52, 160, 25, "FOV Aimbot:", false, tabSettings2)
+local aimbotFovEdit = guiCreateEdit(190, 49, 120, 28, tostring(aimbotFov), false, tabSettings2)
+guiCreateLabel(18, 92, 160, 25, "Поправка угла:", false, tabSettings2)
+local aimbotCorrectionEdit = guiCreateEdit(190, 89, 120, 28, tostring(aimbotCorrection), false, tabSettings2)
+local aimbotCameraCheck = guiCreateCheckBox(18, 130, 260, 25, "Поворачивать камеру", aimbotUseCamera, false, tabSettings2)
+local applySettings2 = guiCreateButton(18, 170, 292, 35, "Сохранить настройки", false, tabSettings2)
+addEventHandler("onClientGUIClick", applySettings2, function(button)
+    if button ~= "left" then return end
+
+    local fov = tonumber(guiGetText(aimbotFovEdit))
+    local correction = tonumber(guiGetText(aimbotCorrectionEdit))
+    if not fov or not correction then
+        outputChatBox("[Настройка 2] #FF0000Введите числа в поля FOV и поправки.", 255, 255, 255, true)
+        return
+    end
+
+    aimbotFov = math.max(10, math.min(2000, fov))
+    aimbotCorrection = math.max(-180, math.min(180, correction))
+    aimbotUseCamera = guiCheckBoxGetSelected(aimbotCameraCheck)
+    guiSetText(aimbotFovEdit, tostring(aimbotFov))
+    guiSetText(aimbotCorrectionEdit, tostring(aimbotCorrection))
+    outputChatBox("[Настройка 2] #00FF00Настройки сохранены.", 255, 255, 255, true)
+end, false)
+
+----------------------------------------------------------------
 -- ВКЛАДКА ТЕМА
 ----------------------------------------------------------------
 local themeDefinitions = {
@@ -1604,8 +1626,7 @@ for _, item in ipairs(menuButtons) do
     addMenuButton(item.name, item.fn, item.side, item.key, item.id)
 end
 
--- ВКЛАДКА: РАБОТЫ
-local tabJobs = guiCreateTab("Работы", tabPanel)
+-- ВКЛАДКА: РАБОТЫ (сама вкладка создана выше, чтобы сохранить порядок вкладок)
 local scrollJobs = guiCreateScrollPane(5, 5, windowW - 30, windowH - 80, false, tabJobs)
 guiScrollPaneSetScrollBars(scrollJobs, false, true)
 local colYJobs = { left = 10, center = 10, right = 10 }
