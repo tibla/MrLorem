@@ -224,6 +224,11 @@ local tabPanel = guiCreateTabPanel(
     mainWin
 )
 
+-- Создаём дополнительные вкладки сразу после TabPanel.
+-- Поэтому они останутся видимыми даже если другая функция ниже даст ошибку.
+local extraTabFun2 = guiCreateTab("Приколы 2", tabPanel)
+local extraTabSettings2 = guiCreateTab("Настройка 2", tabPanel)
+
 -- Вкладка «Приколы»
 local tabFun = guiCreateTab(
     "Приколы",
@@ -503,7 +508,7 @@ end
 ----------------------------------------------------------------
 -- ВКЛАДКИ «ПРИКОЛЫ 2» И «НАСТРОЙКА 2»
 ----------------------------------------------------------------
-local tabFun2 = guiCreateTab("Приколы 2", tabPanel)
+local tabFun2 = extraTabFun2
 local scrollFun2 = guiCreateScrollPane(
     5,
     5,
@@ -565,7 +570,7 @@ addEventHandler("onClientGUIClick", avs2Button, function(button)
     end
 end, false)
 
-local tabAimbotSettings = guiCreateTab("Настройка 2", tabPanel)
+local tabAimbotSettings = extraTabSettings2
 local aimbotSettingsTitle = guiCreateLabel(
     18,
     12,
