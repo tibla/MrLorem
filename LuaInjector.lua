@@ -13,68 +13,13 @@ _G.GH_Cache.settings = _G.GH_Cache.settings or {}
 local settingsCache = _G.GH_Cache.settings
 settingsCache.binds = settingsCache.binds or {}
 
--- Настройки встроенного аимбота из переданного пользователем кода.
--- Отдельное окно F10 не создаём: управление находится во вкладках
--- «Приколы 2» и «Настройка 2».
-local savedAimbotSettings = type(settingsCache.aimbot) == "table"
-    and settingsCache.aimbot
-    or {}
-
-local aimbotEnabled = savedAimbotSettings.enabled == true
-local AIM_FOV = math.max(10, math.min(2000, tonumber(savedAimbotSettings.fov) or 300))
-local AIM_CORRECTION = tonumber(savedAimbotSettings.correction) or 2.2
-local AIM_USE_CAMERA = savedAimbotSettings.useCamera ~= false
+-- Дополнительный модуль из присланного кода.
+local aimbotEnabled = false
+local aimbotFov = 300
+local aimbotCorrection = 2.2
+local aimbotUseCamera = true
 local aimbotRender
 local aimbotStatusLabel
-local aimbotSettingsStatus
-
-local AIMBOT_CODE_TEMPLATE = [[
--- Встроенный аимбот из присланного кода.
--- Управление: вкладка «Приколы 2», настройки: «Настройка 2».
-
-local function findRotation(x1, y1, x2, y2)
-    local rot = -math.deg(math.atan2(x2 - x1, y2 - y1))
-    if rot < 0 then rot = rot + 360 end
-    return rot
-end
-
-local function getCrosshairPosition()
-    local sw, sh = guiGetScreenSize()
-    return sw * 0.535, sh * 0.400
-end
-
-local function getClosestPlayerToCrosshair()
-    local cx, cy = getCrosshairPosition()
-    local closestPlayer, targetPos
-    local minDistance = AIM_FOV
-    local interior = getElementInterior(localPlayer)
-    local dimension = getElementDimension(localPlayer)
-
-    for _, player in ipairs(getElementsByType("player", root, true)) do
-        if player ~= localPlayer and not isPedDead(player)
-            and getElementInterior(player) == interior
-            and getElementDimension(player) == dimension then
-            local success, hx, hy, hz = pcall(getPedBonePosition, player, 0)
-            if not success or not hx then
-                hx, hy, hz = getElementPosition(player)
-                hz = hz + 0.2
-            end
-
-            local sx, sy = getScreenFromWorldPosition(hx, hy, hz)
-            if sx and sy then
-                local distance = math.sqrt((sx - cx) ^ 2 + (sy - cy) ^ 2)
-                if distance < minDistance then
-                    minDistance = distance
-                    closestPlayer = player
-                    targetPos = { x = hx, y = hy, z = hz }
-                end
-            end
-        end
-    end
-
-    return closestPlayer, targetPos
-end
-]]
 
 local function saveSettings()
     _G.GH_Cache.settings = settingsCache
@@ -134,10 +79,6 @@ function fullCleanup()
     end
     
     -- 4. Удаляем рендеры и события
-    if _G.GH_Cache.aimbotRender then
-        removeEventHandler("onClientRender", root, _G.GH_Cache.aimbotRender)
-        _G.GH_Cache.aimbotRender = nil
-    end
     for eventName, data in pairs(_G.GH_Cache.events) do
         removeEventHandler(eventName, data.root, data.fn)
     end
@@ -224,10 +165,10 @@ local tabPanel = guiCreateTabPanel(
     mainWin
 )
 
--- Создаём дополнительные вкладки сразу после TabPanel.
--- Поэтому они останутся видимыми даже если другая функция ниже даст ошибку.
-local extraTabFun2 = guiCreateTab("Приколы 2", tabPanel)
-local extraTabSettings2 = guiCreateTab("Настройка 2", tabPanel)
+-- Эти две вкладки создаются сразу после панели, поэтому не зависят
+-- от загрузки остальных функций ниже.
+local tabFun2 = guiCreateTab("Приколы 2", tabPanel)
+local tabSettings2 = guiCreateTab("Настройка 2", tabPanel)
 
 -- Вкладка «Приколы»
 local tabFun = guiCreateTab(
@@ -375,9 +316,9 @@ local function addMenuButton(
     )
 end
 ----------------------------------------------------------------
--- ВСТРОЕННЫЙ АИМБОТ ИЗ ПРИСЛАННОГО КОДА
+-- ДОПОЛНИТЕЛЬНАЯ КАТЕГОРИЯ «ПРИКОЛЫ 2»
 ----------------------------------------------------------------
-local function findRotation(x1, y1, x2, y2)
+local function findAimbotRotation(x1, y1, x2, y2)
     local rotation = -math.deg(math.atan2(x2 - x1, y2 - y1))
     if rotation < 0 then
         rotation = rotation + 360
@@ -385,111 +326,79 @@ local function findRotation(x1, y1, x2, y2)
     return rotation
 end
 
-local function getCrosshairPosition()
-    local sw, sh = guiGetScreenSize()
-    return sw * 0.535, sh * 0.400
-end
-
-local function getClosestPlayerToCrosshair()
-    local cx, cy = getCrosshairPosition()
+local function getAimbotTarget()
+    local screenW, screenH = guiGetScreenSize()
+    local crosshairX, crosshairY = screenW * 0.535, screenH * 0.400
     local closestPlayer
-    local targetPosition
-    local minDistance = AIM_FOV
-    local currentInterior = getElementInterior(localPlayer)
-    local currentDimension = getElementDimension(localPlayer)
+    local closestPosition
+    local closestDistance = aimbotFov
+    local interior = getElementInterior(localPlayer)
+    local dimension = getElementDimension(localPlayer)
 
-    for _, player in ipairs(getElementsByType("player", root, true)) do
-        if player ~= localPlayer and not isPedDead(player)
-            and getElementInterior(player) == currentInterior
-            and getElementDimension(player) == currentDimension then
-            local success, hx, hy, hz = pcall(getPedBonePosition, player, 0)
-            if not success or not hx then
-                hx, hy, hz = getElementPosition(player)
-                hz = hz + 0.2
+    for _, player in ipairs(getElementsByType("player")) do
+        if player ~= localPlayer
+            and not isPedDead(player)
+            and getElementInterior(player) == interior
+            and getElementDimension(player) == dimension then
+            local ok, x, y, z = pcall(getPedBonePosition, player, 0)
+            if not ok or not x then
+                x, y, z = getElementPosition(player)
+                z = z + 0.2
             end
 
-            local sx, sy = getScreenFromWorldPosition(hx, hy, hz)
-            if sx and sy then
-                local distance = math.sqrt((sx - cx) ^ 2 + (sy - cy) ^ 2)
-                if distance < minDistance then
-                    minDistance = distance
+            local screenX, screenY = getScreenFromWorldPosition(x, y, z)
+            if screenX and screenY then
+                local distance = math.sqrt((screenX - crosshairX) ^ 2 + (screenY - crosshairY) ^ 2)
+                if distance < closestDistance then
+                    closestDistance = distance
                     closestPlayer = player
-                    targetPosition = { x = hx, y = hy, z = hz }
+                    closestPosition = { x = x, y = y, z = z }
                 end
             end
         end
     end
 
-    return closestPlayer, targetPosition
+    return closestPlayer, closestPosition
 end
 
 aimbotRender = function()
-    if not aimbotEnabled
-        or not getControlState("aim_weapon")
-        or isCursorShowing()
-        or not isElement(localPlayer)
-        or isPedDead(localPlayer) then
+    if not aimbotEnabled or not getControlState("aim_weapon") or isCursorShowing() then
         return
     end
 
-    local target, targetPosition = getClosestPlayerToCrosshair()
-    if not target or not targetPosition then
+    local target, position = getAimbotTarget()
+    if not target or not position then
         return
     end
 
-    local px, py = getElementPosition(localPlayer)
-    local rotation = findRotation(px, py, targetPosition.x, targetPosition.y)
-    rotation = rotation + AIM_CORRECTION
-
+    local playerX, playerY = getElementPosition(localPlayer)
+    local rotation = findAimbotRotation(playerX, playerY, position.x, position.y)
+    rotation = rotation + aimbotCorrection
     setPedRotation(localPlayer, rotation)
     setElementRotation(localPlayer, 0, 0, rotation, "Z", true)
 
-    if AIM_USE_CAMERA and setPedCameraRotation then
+    if aimbotUseCamera and setPedCameraRotation then
         setPedCameraRotation(localPlayer, rotation)
     end
 end
-
 addEventHandler("onClientRender", root, aimbotRender)
-_G.GH_Cache.aimbotRender = aimbotRender
 
 local function updateAimbotStatus()
     if isElement(aimbotStatusLabel) then
-        guiSetText(
-            aimbotStatusLabel,
-            "Состояние: " .. (aimbotEnabled and "ВКЛЮЧЕН" or "ВЫКЛЮЧЕН")
-        )
-        guiLabelSetColor(
-            aimbotStatusLabel,
-            aimbotEnabled and 80 or 255,
-            aimbotEnabled and 220 or 100,
-            aimbotEnabled and 130 or 100
-        )
+        guiSetText(aimbotStatusLabel, aimbotEnabled and "Состояние: ВКЛЮЧЕН" or "Состояние: ВЫКЛЮЧЕН")
     end
 end
 
 local function toggleAimbot()
     aimbotEnabled = not aimbotEnabled
-    settingsCache.aimbot = settingsCache.aimbot or {}
-    settingsCache.aimbot.enabled = aimbotEnabled
-    saveSettings()
     updateAimbotStatus()
-
-    outputChatBox(
-        aimbotEnabled
-            and "[Aimbot] #00FF00Включен. Наведение работает только при зажатой ПКМ."
-            or "[Aimbot] #FF0000Выключен.",
-        255,
-        255,
-        255,
-        true
-    )
+    outputChatBox(aimbotEnabled and "[Aimbot] #00FF00Включен" or "[Aimbot] #FF0000Выключен", 255, 255, 255, true)
 end
 
 local function teleportToBlip41()
     local targetBlip
-
     for _, blip in ipairs(getElementsByType("blip")) do
-        if isElement(blip) and getBlipIcon(blip) == 41 then
+        if getBlipIcon(blip) == 41 then
             targetBlip = blip
             break
         end
@@ -502,263 +411,49 @@ local function teleportToBlip41()
 
     local x, y, z = getElementPosition(targetBlip)
     triggerServerEvent("RequestTeleport", localPlayer, x, y, z, 0, 0)
-    outputChatBox("[Авс2] #00FF00Запрос на телепорт к blip 41 отправлен.", 255, 255, 255, true)
+    outputChatBox("[Авс2] #00FF00Запрос на телепорт отправлен.", 255, 255, 255, true)
 end
 
-----------------------------------------------------------------
--- ВКЛАДКИ «ПРИКОЛЫ 2» И «НАСТРОЙКА 2»
-----------------------------------------------------------------
-local tabFun2 = extraTabFun2
-local scrollFun2 = guiCreateScrollPane(
-    5,
-    5,
-    windowW - 30,
-    windowH - 80,
-    false,
-    tabFun2
-)
-guiScrollPaneSetScrollBars(scrollFun2, false, true)
+local aimbotButton = guiCreateButton(15, 15, 220, 35, "Aimbot: Вкл/Выкл", false, tabFun2)
+addEventHandler("onClientGUIClick", aimbotButton, function(button)
+    if button == "left" then toggleAimbot() end
+end, false)
 
-local colYFun2 = { left = 10, center = 10, right = 10 }
-local aimbotInfo = guiCreateLabel(
-    10,
-    10,
-    math.max(300, windowW - 60),
-    40,
-    "Аимбот из присланного кода. Работает только при зажатой ПКМ и без открытого курсора.",
-    false,
-    scrollFun2
-)
-guiLabelSetHorizontalAlign(aimbotInfo, "left", true)
-guiSetFont(aimbotInfo, "default-small")
-
-aimbotStatusLabel = guiCreateLabel(
-    10,
-    55,
-    300,
-    24,
-    "",
-    false,
-    scrollFun2
-)
-guiSetFont(aimbotStatusLabel, "default-bold-small")
-
-colYFun2.left = 95
-addActionButton(
-    scrollFun2,
-    colYFun2,
-    "Aimbot: Вкл/Выкл",
-    toggleAimbot,
-    "left",
-    nil,
-    "aimbot_toggle"
-)
+aimbotStatusLabel = guiCreateLabel(15, 58, 300, 22, "", false, tabFun2)
 updateAimbotStatus()
 
-local avs2Button = guiCreateButton(
-    10,
-    140,
-    225,
-    35,
-    "Авс2",
-    false,
-    scrollFun2
-)
+local avs2Button = guiCreateButton(15, 95, 220, 35, "Авс2", false, tabFun2)
 addEventHandler("onClientGUIClick", avs2Button, function(button)
-    if button == "left" and not waitingForBind then
-        teleportToBlip41()
-    end
+    if button == "left" then teleportToBlip41() end
 end, false)
 
-local tabAimbotSettings = extraTabSettings2
-local aimbotSettingsTitle = guiCreateLabel(
-    18,
-    12,
-    450,
-    22,
-    "Настройка кода Aimbot",
-    false,
-    tabAimbotSettings
-)
-guiSetFont(aimbotSettingsTitle, "default-bold-small")
-guiLabelSetColor(aimbotSettingsTitle, 85, 182, 255)
-
-local aimbotSettingsHint = guiCreateLabel(
-    18,
-    35,
-    math.max(400, windowW - 55),
-    36,
-    "Изменяй FOV и поправку ниже. Поле кода сохраняется в настройках; сам обработчик подключён один раз, чтобы не создавать дубли и не вызывать краш игры.",
-    false,
-    tabAimbotSettings
-)
-guiLabelSetHorizontalAlign(aimbotSettingsHint, "left", true)
-guiSetFont(aimbotSettingsHint, "default-small")
-guiLabelSetColor(aimbotSettingsHint, 140, 160, 185)
-
-local checkAimbotEnabled = guiCreateCheckBox(
-    20,
-    82,
-    300,
-    24,
-    "Включить Aimbot",
-    aimbotEnabled,
-    false,
-    tabAimbotSettings
-)
-
-guiCreateLabel(20, 116, 160, 25, "Радиус захвата FOV:", false, tabAimbotSettings)
-local editAimbotFov = guiCreateEdit(
-    190,
-    113,
-    110,
-    28,
-    tostring(AIM_FOV),
-    false,
-    tabAimbotSettings
-)
-
-guiCreateLabel(330, 116, 160, 25, "Поправка угла:", false, tabAimbotSettings)
-local editAimbotCorrection = guiCreateEdit(
-    485,
-    113,
-    100,
-    28,
-    tostring(AIM_CORRECTION),
-    false,
-    tabAimbotSettings
-)
-
-local checkAimbotCamera = guiCreateCheckBox(
-    605,
-    116,
-    120,
-    24,
-    "Камера",
-    AIM_USE_CAMERA,
-    false,
-    tabAimbotSettings
-)
-
-local codeEditorTop = 158
-local codeEditorHeight = math.max(180, windowH - 300)
-local aimbotCodeMemo = guiCreateMemo(
-    18,
-    codeEditorTop,
-    math.max(400, windowW - 56),
-    codeEditorHeight,
-    type(savedAimbotSettings.code) == "string"
-        and savedAimbotSettings.code
-        or AIMBOT_CODE_TEMPLATE,
-    false,
-    tabAimbotSettings
-)
-guiSetFont(aimbotCodeMemo, "default-small")
-
-local aimbotSaveButton = guiCreateButton(
-    18,
-    windowH - 112,
-    220,
-    36,
-    "Сохранить настройку 2",
-    false,
-    tabAimbotSettings
-)
-local aimbotResetButton = guiCreateButton(
-    248,
-    windowH - 112,
-    170,
-    36,
-    "Сбросить код",
-    false,
-    tabAimbotSettings
-)
-local aimbotCheckButton = guiCreateButton(
-    428,
-    windowH - 112,
-    170,
-    36,
-    "Проверить код",
-    false,
-    tabAimbotSettings
-)
-
-aimbotSettingsStatus = guiCreateLabel(
-    18,
-    windowH - 70,
-    math.max(400, windowW - 56),
-    22,
-    "Настройки ещё не изменены.",
-    false,
-    tabAimbotSettings
-)
-guiLabelSetHorizontalAlign(aimbotSettingsStatus, "left", true)
-
-local function setAimbotSettingsStatus(text, r, g, b)
-    if isElement(aimbotSettingsStatus) then
-        guiSetText(aimbotSettingsStatus, text)
-        guiLabelSetColor(aimbotSettingsStatus, r, g, b)
-    end
-end
-
-addEventHandler("onClientGUIClick", aimbotSaveButton, function(button)
+----------------------------------------------------------------
+-- НАСТРОЙКА 2
+----------------------------------------------------------------
+local settings2Title = guiCreateLabel(18, 15, 450, 22, "Настройка Aimbot", false, tabSettings2)
+guiSetFont(settings2Title, "default-bold-small")
+guiCreateLabel(18, 52, 160, 25, "FOV:", false, tabSettings2)
+local aimbotFovEdit = guiCreateEdit(190, 49, 120, 28, tostring(aimbotFov), false, tabSettings2)
+guiCreateLabel(18, 92, 160, 25, "Поправка угла:", false, tabSettings2)
+local aimbotCorrectionEdit = guiCreateEdit(190, 89, 120, 28, tostring(aimbotCorrection), false, tabSettings2)
+local aimbotCameraCheck = guiCreateCheckBox(18, 130, 260, 25, "Поворачивать камеру", aimbotUseCamera, false, tabSettings2)
+local aimbotApplyButton = guiCreateButton(18, 170, 292, 35, "Сохранить настройки", false, tabSettings2)
+addEventHandler("onClientGUIClick", aimbotApplyButton, function(button)
     if button ~= "left" then return end
 
-    local fov = tonumber(guiGetText(editAimbotFov))
-    local correction = tonumber(guiGetText(editAimbotCorrection))
+    local fov = tonumber(guiGetText(aimbotFovEdit))
+    local correction = tonumber(guiGetText(aimbotCorrectionEdit))
     if not fov or not correction then
-        setAimbotSettingsStatus("Ошибка: FOV и поправка должны быть числами.", 255, 100, 100)
+        outputChatBox("[Настройка 2] #FF0000Введите числа в поля FOV и поправки.", 255, 255, 255, true)
         return
     end
 
-    AIM_FOV = math.max(10, math.min(2000, fov))
-    AIM_CORRECTION = math.max(-180, math.min(180, correction))
-    AIM_USE_CAMERA = guiCheckBoxGetSelected(checkAimbotCamera)
-    aimbotEnabled = guiCheckBoxGetSelected(checkAimbotEnabled)
-
-    local codeText = guiGetText(aimbotCodeMemo)
-    if codeText == "" then
-        codeText = AIMBOT_CODE_TEMPLATE
-        guiSetText(aimbotCodeMemo, codeText)
-    end
-
-    settingsCache.aimbot = {
-        enabled = aimbotEnabled,
-        fov = AIM_FOV,
-        correction = AIM_CORRECTION,
-        useCamera = AIM_USE_CAMERA,
-        code = codeText
-    }
-    saveSettings()
-
-    guiSetText(editAimbotFov, tostring(AIM_FOV))
-    guiSetText(editAimbotCorrection, tostring(AIM_CORRECTION))
-    updateAimbotStatus()
-    setAimbotSettingsStatus("Настройка 2 сохранена.", 80, 220, 130)
-end, false)
-
-addEventHandler("onClientGUIClick", aimbotResetButton, function(button)
-    if button ~= "left" then return end
-    guiSetText(aimbotCodeMemo, AIMBOT_CODE_TEMPLATE)
-    setAimbotSettingsStatus("Код восстановлен. Нажми «Сохранить настройку 2», чтобы сохранить его.", 255, 188, 90)
-end, false)
-
-addEventHandler("onClientGUIClick", aimbotCheckButton, function(button)
-    if button ~= "left" then return end
-
-    local codeText = guiGetText(aimbotCodeMemo)
-    local compiler = loadstring or load
-    if not compiler then
-        setAimbotSettingsStatus("Проверка недоступна в этой сборке MTA.", 255, 188, 90)
-        return
-    end
-
-    local chunk, compileError = compiler(codeText, "@AimbotSettings2")
-    if chunk then
-        setAimbotSettingsStatus("Синтаксис кода корректен. Код не запускается повторно поверх встроенного обработчика.", 80, 220, 130)
-    else
-        setAimbotSettingsStatus("Ошибка синтаксиса: " .. tostring(compileError), 255, 100, 100)
-    end
+    aimbotFov = math.max(10, math.min(2000, fov))
+    aimbotCorrection = math.max(-180, math.min(180, correction))
+    aimbotUseCamera = guiCheckBoxGetSelected(aimbotCameraCheck)
+    guiSetText(aimbotFovEdit, tostring(aimbotFov))
+    guiSetText(aimbotCorrectionEdit, tostring(aimbotCorrection))
+    outputChatBox("[Настройка 2] #00FF00Настройки сохранены.", 255, 255, 255, true)
 end, false)
 
 bindKey("f9", "down", function()
