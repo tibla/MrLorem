@@ -1521,28 +1521,20 @@ function tpJeka() teleportToTextID(jeka, "Jeka") end
 function tpDenis() teleportToTextID(denis, "Denis") end
 
 function smartMarketGhost()
-    local target = getPedOccupiedVehicle(localPlayer) or localPlayer
-    local x, y, z = getElementPosition(target)
-    local rx, ry, rz = getElementRotation(target)
+    -- Получаем координаты локального игрока
+    local x, y, z = getElementPosition(localPlayer)
 
-    rynok() 
-    outputChatBox("[Engine] #FFFF00Запрос отправлен. Ждем возврата...", 255, 255, 255, true)
+    local e = 987
+    local t = 987
 
+    -- Отправляем событие на сервер
+    triggerServerEvent("RequestTeleport", localPlayer, x, y, z, e, t)
+
+    -- Через 1 секунду меняем интерьер и измерение
     setTimer(function()
-        if isElement(target) then
-            setElementPosition(target, x, y, z)
-            setElementRotation(target, rx, ry, rz)
-            outputChatBox("[Engine] #00FF00Вернулись на точку. Ждем 2 сек до смены мира...", 255, 255, 255, true)
-
-            setTimer(function()
-                if isElement(target) then
-                    setElementInterior(target, 0)
-                    setElementDimension(target, 0)
-                    outputChatBox("[Engine] #FF0000Мир сброшен на 0:0!", 255, 255, 255, true)
-                end
-            end, 3000, 1)
-        end
-    end, 1150, 1)
+        setElementInterior(localPlayer, 0)
+        setElementDimension(localPlayer, 0)
+    end, 1000, 1)
 end
 
 function toggleEngine()
