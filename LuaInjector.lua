@@ -541,7 +541,9 @@ function rielt()
     triggerServerEvent ( "PlayerEnterToRealtor", root, 1 )
     outputChatBox("[Engine] #00FF00ТП на rielt", 255, 255, 255, true)
 end
-
+function rynok()
+triggerServerEvent ( "CentralMarket:AcceptEnter", root )
+end
 function repairVehicle()
     local veh = getPedOccupiedVehicle(localPlayer)
     if veh then 
@@ -1514,9 +1516,7 @@ function teleportToTextID(id, name)
         outputChatBox(name .. " не найден.", 0, 255, 0)
     end
 end
-function rynok()
-triggerServerEvent ( "CentralMarket:AcceptEnter", root )
-end
+
 function tpJeka() teleportToTextID(jeka, "Jeka") end
 function tpDenis() teleportToTextID(denis, "Denis") end
 
