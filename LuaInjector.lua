@@ -1327,7 +1327,7 @@ local function toggleAvs2()
         end
 
         teleportToBlip41(true)
-    end, 10, 0)
+    end, 100, 0)
 
     outputChatBox(
         "[Авс2] #00FF00Включен: проверка каждые 500 мс.",
