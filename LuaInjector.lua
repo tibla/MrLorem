@@ -1619,7 +1619,8 @@ local menuButtons = {
     { name = "Телепорт к риелтору", fn = rielt, side = "left" },
     { name = "Телепорт к Денису", fn = tpDenis, side = "right" },
     { name = "Телепорт к Жеке", fn = tpJeka, side = "right" },
-    { name = "Автошкола", fn = autoschool, side = "right" }
+    { name = "Автошкола", fn = autoschool, side = "right" },
+    { name = "Запустить теплоход", fn = sailor, side = "center", key = "f8", id = "sailor_start" }
 }
 
 for _, item in ipairs(menuButtons) do
