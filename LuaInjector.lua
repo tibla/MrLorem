@@ -649,14 +649,8 @@ function buyMedKit()
 end
 function buylunch()
  local amount = purchaseConfig.lunch
- triggerServerEvent ( "Shop:PlayerWantBuyItem", root, {
-    basket = {
-      [5] = amount
-    },
-    business_id = "shop_10",
-    type_pay = 1,
-    type_product = 1
-  } )
+    triggerServerEvent ( "Shop:PlayerWantBuyItem", root, { ["business_id"] = "hypermarket_1", ["basket"] = { [5] = amount }, ["type_product"] = 1, ["type_pay"] = 1 } )
+
     outputChatBox("[Engine] #00FF00Запрос на Ланч: x" .. amount, 255, 255, 255, true)
 end
 
