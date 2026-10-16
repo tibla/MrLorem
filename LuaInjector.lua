@@ -1281,11 +1281,10 @@ local function teleportToBlip41(silent)
         "RequestTeleport",
         localPlayer,
         x, y, z,
-        126, 140
+        0, 0
     )
 
-    setElementInterior(localPlayer, 0)
-    setElementDimension(localPlayer, 0)
+
 
     if not silent then
         outputChatBox(
