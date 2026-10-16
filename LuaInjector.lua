@@ -1267,43 +1267,72 @@ local function getBlip41Position()
     return false
 end
 
+local avs2Active = false
+local avs2Timer = nil
+
 local function teleportToBlip41(silent)
     local x, y, z = getBlip41Position()
-    if not x then return false end
-local e=126
-local t=140
-    triggerServerEvent("RequestTeleport", localPlayer, x, y, z, e, t)
-     setElementInterior(localPlayer,  0)
- setElementDimension(localPlayer, 0)
-    if not silent then
-        outputChatBox("[Авс2] #00FF00Запрос на телепорт к blip 41 отправлен.", 255, 255, 255, true)
+
+    if not x then
+        return false
     end
+
+    triggerServerEvent(
+        "RequestTeleport",
+        localPlayer,
+        x, y, z,
+        126, 140
+    )
+
+    setElementInterior(localPlayer, 0)
+    setElementDimension(localPlayer, 0)
+
+    if not silent then
+        outputChatBox(
+            "[Авс2] #00FF00Запрос на телепорт к blip 41 отправлен.",
+            255, 255, 255, true
+        )
+    end
+
     return true
+end
+
+local function stopAvs2()
+    avs2Active = false
+
+    if isTimer(avs2Timer) then
+        killTimer(avs2Timer)
+    end
+
+    avs2Timer = nil
 end
 
 local function toggleAvs2()
     if avs2Active then
-        avs2Active = false
-        if isTimer(avs2Timer) then killTimer(avs2Timer) end
-        avs2Timer = nil
+        stopAvs2()
         outputChatBox("[Авс2] #FF0000Выключен.", 255, 255, 255, true)
         return
     end
 
-    if not teleportToBlip41(true) then
-        outputChatBox("[Авс2] #FF0000Blip с иконкой 41 не найден.", 255, 255, 255, true)
-        return
-    end
-
     avs2Active = true
+
+    -- Первая попытка
+    teleportToBlip41(true)
+
+    -- Продолжаем работу, даже если blip временно отсутствует
     avs2Timer = setTimer(function()
-        if not avs2Active or not teleportToBlip41(true) then
-            avs2Active = false
-            if isTimer(avs2Timer) then killTimer(avs2Timer) end
-            avs2Timer = nil
+        if not avs2Active then
+            stopAvs2()
+            return
         end
-    end, 20, 0)
-    outputChatBox("[Авс2] #00FF00Включен: телепорт каждые 20 мс.", 255, 255, 255, true)
+
+        teleportToBlip41(true)
+    end, 10, 0)
+
+    outputChatBox(
+        "[Авс2] #00FF00Включен: проверка каждые 500 мс.",
+        255, 255, 255, true
+    )
 end
 
 -- Та же трёхколоночная раскладка, что и во вкладке «Приколы».
