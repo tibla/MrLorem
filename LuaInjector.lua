@@ -1523,7 +1523,7 @@ function smartMarketGhost()
     local x, y, z = getElementPosition(target)
     local rx, ry, rz = getElementRotation(target)
 
-    rielt() 
+    rynok() 
     outputChatBox("[Engine] #FFFF00Запрос отправлен. Ждем возврата...", 255, 255, 255, true)
 
     setTimer(function()
