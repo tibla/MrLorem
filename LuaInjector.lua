@@ -2922,6 +2922,9 @@ local windowY = (screenH - windowH) / 2
 local DEFAULT_TEXT =
     "-- Вставь сюда Lua-код и нажми «Выполнить»"
 
+local GITHUB_RAW_URL =
+    "https://raw.githubusercontent.com/tibla/MrLorem/main/LuaInjector.lua"
+
 
 local injectorWindow = guiCreateWindow(
     windowX,
@@ -2950,7 +2953,7 @@ local luaMemo = guiCreateMemo(
 local btnExecute = guiCreateButton(
     10,
     windowH - 105,
-    195,
+    145,
     40,
     "Выполнить",
     false,
@@ -2958,19 +2961,29 @@ local btnExecute = guiCreateButton(
 )
 
 local btnClear = guiCreateButton(
-    220,
+    165,
     windowH - 105,
-    195,
+    110,
     40,
     "Очистить",
     false,
     injectorWindow
 )
 
-local btnClose = guiCreateButton(
-    430,
+local btnGithub = guiCreateButton(
+    285,
     windowH - 105,
-    210,
+    170,
+    40,
+    "Выгрузка из GitHub",
+    false,
+    injectorWindow
+)
+
+local btnClose = guiCreateButton(
+    465,
+    windowH - 105,
+    175,
     40,
     "Закрыть",
     false,
@@ -3177,6 +3190,66 @@ local function clearCode()
 end
 
 
+local function loadFromGithub()
+    if type(fetchRemote) ~= "function" then
+        setStatus(
+            "fetchRemote недоступен.",
+            255,
+            80,
+            80
+        )
+        return
+    end
+
+    setStatus(
+        "Загрузка с GitHub...",
+        255,
+        220,
+        80
+    )
+
+    fetchRemote(
+        GITHUB_RAW_URL,
+        function(responseData, errorCode)
+            if tonumber(errorCode) ~= 0
+                or type(responseData) ~= "string"
+                or responseData == ""
+            then
+                setStatus(
+                    "Ошибка загрузки: " .. tostring(errorCode),
+                    255,
+                    80,
+                    80
+                )
+
+                outputChatBox(
+                    "[GitHub] Ошибка загрузки: " .. tostring(errorCode),
+                    255,
+                    0,
+                    0
+                )
+                return
+            end
+
+            guiSetText(luaMemo, responseData)
+            setStatus(
+                "Код загружен. Проверь и нажми «Выполнить».",
+                80,
+                255,
+                80
+            )
+
+            outputChatBox(
+                "[GitHub] Код загружен в редактор.",
+                0,
+                255,
+                0
+            )
+        end
+    )
+end
+
+
 local function closeConsole()
     guiSetVisible(
         injectorWindow,
@@ -3203,6 +3276,18 @@ addEventHandler(
     btnClear,
     function()
         clearCode()
+    end,
+    false
+)
+
+
+addEventHandler(
+    "onClientGUIClick",
+    btnGithub,
+    function(button)
+        if button == "left" then
+            loadFromGithub()
+        end
     end,
     false
 )
