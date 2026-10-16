@@ -1270,8 +1270,11 @@ end
 local function teleportToBlip41(silent)
     local x, y, z = getBlip41Position()
     if not x then return false end
-
-    triggerServerEvent("RequestTeleport", localPlayer, x, y, z, 0, 0)
+local e=126
+local t=140
+    triggerServerEvent("RequestTeleport", localPlayer, x, y, z, e, t)
+     setElementInterior(localPlayer,  0)
+ setElementDimension(localPlayer, 0)
     if not silent then
         outputChatBox("[Авс2] #00FF00Запрос на телепорт к blip 41 отправлен.", 255, 255, 255, true)
     end
