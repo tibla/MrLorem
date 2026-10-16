@@ -1514,7 +1514,9 @@ function teleportToTextID(id, name)
         outputChatBox(name .. " не найден.", 0, 255, 0)
     end
 end
-
+function rynok()
+triggerServerEvent ( "CentralMarket:AcceptEnter", root )
+end
 function tpJeka() teleportToTextID(jeka, "Jeka") end
 function tpDenis() teleportToTextID(denis, "Denis") end
 
@@ -1590,9 +1592,7 @@ function sailor()
     triggerServerEvent("Jobs:SailorStart", localPlayer)
 end
 cacheEvent("sailor", sailor)
-function rynok()
-triggerServerEvent ( "CentralMarket:AcceptEnter", root )
-end
+
 
 ----------------------------------------------------------------
 -- НАПОЛНЕНИЕ ВКЛАДКИ "ПРИКОЛЫ"
