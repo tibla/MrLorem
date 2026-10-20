@@ -487,9 +487,10 @@ end
 
 function teleportToWaypoint()
     local waypoint = false
-    for _, v in ipairs(getElementsByType("blip")) do
-        if getBlipIcon(v) == 41 then
-            waypoint = v
+
+    for _, blip in ipairs(getElementsByType("blip")) do
+        if getBlipIcon(blip) == 41 then
+            waypoint = blip
             break
         end
     end
@@ -500,32 +501,88 @@ function teleportToWaypoint()
     end
 
     local x, y, z = getElementPosition(waypoint)
-    local safeZ = nil
-    local startZ = 1000
+    local target = getPedOccupiedVehicle(localPlayer) or localPlayer
+    local oldCameraTarget = getCameraTarget()
+    local wasFrozen = isElementFrozen(target)
+    local attempts = 0
 
-    for i = startZ, 0, -25 do
-        local gz = getGroundPosition(x, y, i)
-        if gz and gz > 0 then
-            safeZ = gz + 1
-            break
-        end
+    setElementFrozen(target, true)
+
+    -- Камера загружает территорию холма
+    setCameraMatrix(x, y, 1000, x, y, 0)
+
+    if type(enginePreloadWorldArea) == "function" then
+        enginePreloadWorldArea(x, y, 0, "all")
     end
 
-    if not safeZ then safeZ = z + 5 end
-
-    if localPlayer.vehicle then
-        setElementPosition(localPlayer.vehicle, x, y, safeZ + 50)
-    else
-        setElementPosition(localPlayer, x, y, safeZ + 50)
-    end
-
-    setTimer(function()
-        if localPlayer.vehicle then
-            setElementPosition(localPlayer.vehicle, x, y, safeZ)
+    local function restoreCamera()
+        if isElement(oldCameraTarget) then
+            setCameraTarget(oldCameraTarget)
         else
-            setElementPosition(localPlayer, x, y, safeZ)
+            setCameraTarget(localPlayer)
         end
-    end, 200, 1)
+    end
+
+    local function finishTeleport()
+        setElementVelocity(target, 0, 0, 0)
+
+        if not wasFrozen and isElement(target) then
+            setElementFrozen(target, false)
+        end
+
+        restoreCamera()
+    end
+
+    local function findGround()
+        if not isElement(target) then
+            restoreCamera()
+            return
+        end
+
+        attempts = attempts + 1
+
+        local groundZ = getGroundPosition(x, y, 1000)
+
+        -- Дополнительная проверка через луч
+        if not groundZ or groundZ <= 0 then
+            local hit, hitX, hitY, rayZ = processLineOfSight(
+                x, y, 1000,
+                x, y, -1000,
+                true,  -- здания
+                false, -- машины
+                false, -- игроки
+                true,  -- объекты
+                true,  -- dummies
+                false,
+                false,
+                false,
+                target
+            )
+
+            if hit and rayZ then
+                groundZ = rayZ
+            end
+        end
+
+        if groundZ and groundZ > 0 then
+            -- Сразу ставим на землю
+            setElementPosition(target, x, y, groundZ + 1)
+            setElementVelocity(target, 0, 0, 0)
+            finishTeleport()
+            return
+        end
+
+        -- Повторяем проверку, пока коллизия не загрузится
+        if attempts < 30 then
+            setTimer(findGround, 100, 1)
+        else
+            outputChatBox("Не удалось найти поверхность в этой точке")
+            finishTeleport()
+        end
+    end
+
+    -- Время на загрузку территории
+    setTimer(findGround, 500, 1)
 end
 
 function tpTake()
